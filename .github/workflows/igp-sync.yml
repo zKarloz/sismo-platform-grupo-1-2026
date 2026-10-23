@@ -1,0 +1,74 @@
+# Ingesta automatizada de reportes IGP/CENSIS publicados.
+# Esta tarea NO emite alertas tempranas ni predice terremotos.
+# No necesita mantener FastAPI/Render activo y no reemplaza ci.yml.
+name: Sincronización IGP a Supabase
+
+on:
+  # GitHub ejecuta los cron en la rama predeterminada; horario en UTC.
+  # Minuto 17 de cada hora, para evitar la carga del minuto 0.
+  schedule:
+    - cron: '17 * * * *'
+  # Permite validar una ejecución desde la pestaña Actions.
+  workflow_dispatch:
+
+# Solo leemos el repositorio: las escrituras son a PostgreSQL mediante secret.
+permissions:
+  contents: read
+
+# No lanzar dos copias simultáneas de esta sincronización.
+concurrency:
+  group: igp-sync-supabase
+  cancel-in-progress: false
+
+jobs:
+  igp-sync:
+    name: Consultar IGP y persistir reportes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: services/api
+
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Preparar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: services/api/requirements.txt
+
+      - name: Instalar dependencias de FastAPI e ingesta
+        run: python -m pip install -r requirements.txt
+
+      - name: Verificar que existe DATABASE_URL
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          # No imprimir el secreto en logs.
+          if [ -z "$DATABASE_URL" ]; then
+            echo '::error::Falta crear el secret DATABASE_URL en GitHub Actions.'
+            exit 1
+          fi
+
+      - name: Sincronizar reportes IGP a Supabase
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PYTHONUNBUFFERED: '1'
+        run: |
+          # Conservar el código de salida del CLI aunque exista tee.
+          set -o pipefail
+          python -m app.commands.sync_igp --limit 100 | tee "$RUNNER_TEMP/igp-sync.log"
+
+          # PARCIAL es técnicamente una ejecución válida, pero NO una
+          # confirmación de catálogo completo. Señalarlo en el resumen.
+          if grep -q '^PARCIAL' "$RUNNER_TEMP/igp-sync.log"; then
+            echo '::warning::La ingesta IGP fue parcial: revisar ingestion_runs.error_summary.'
+            echo '### IGP: sincronización parcial' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Se guardaron los registros válidos, pero algunos fueron omitidos. Revisar ingestion_runs.error_summary en Supabase.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '### IGP: sincronización completada' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Revisar el detalle de registros y fecha en ingestion_runs.' >> "$GITHUB_STEP_SUMMARY"
+          fi

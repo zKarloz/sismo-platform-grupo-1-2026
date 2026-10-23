@@ -1,0 +1,8 @@
+# Dependencias del API, con rangos compatibles y sin versión flotante sin límite.
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30,<1.0
+pydantic-settings>=2.6,<3.0
+SQLAlchemy>=2.0,<3.0
+psycopg[binary]>=3.2,<4.0
+pytest>=8,<10
+httpx>=0.27,<1.0

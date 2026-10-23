@@ -1,0 +1,94 @@
+/* Sistema de diseño: valores centralizados para claro y oscuro. */
+@import "tailwindcss";
+
+/* Tailwind v4: selector manual controlado por useTheme.ts. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* La fuente queda disponible también como variable CSS normal. */
+@theme {
+  --font-sans: "Inter", "Segoe UI", Arial, sans-serif;
+}
+
+/* Los tokens semánticos generan utilidades Tailwind: bg-page, text-main, etc. */
+@theme inline {
+  --color-page: var(--ui-page);
+  --color-panel: var(--ui-panel);
+  --color-panel-alt: var(--ui-panel-alt);
+  --color-border-ui: var(--ui-border);
+  --color-main: var(--ui-main);
+  --color-muted: var(--ui-muted);
+  --color-soft: var(--ui-soft);
+  --color-accent: var(--ui-accent);
+  --color-accent-soft: var(--ui-accent-soft);
+
+  --color-sidebar: var(--ui-sidebar);
+  --color-sidebar-muted: var(--ui-sidebar-muted);
+  --color-sidebar-active: var(--ui-sidebar-active);
+  --color-sidebar-active-text: var(--ui-sidebar-active-text);
+  --color-sidebar-hover: var(--ui-sidebar-hover);
+
+  --color-banner: var(--ui-banner);
+  --color-banner-accent: var(--ui-banner-accent);
+  --color-banner-muted: var(--ui-banner-muted);
+}
+
+/* Tema claro: mantiene la identidad azul marino y cyan del proyecto. */
+:root {
+  font-family: var(--font-sans);
+  color-scheme: light;
+  --ui-page: #f8fafc;
+  --ui-panel: #ffffff;
+  --ui-panel-alt: #f1f5f9;
+  --ui-border: #e2e8f0;
+  --ui-main: #0f172a;
+  --ui-muted: #64748b;
+  --ui-soft: #64748b;
+  --ui-accent: #0e7490;
+  --ui-accent-soft: #ecfeff;
+
+  --ui-sidebar: #0b2035;
+  --ui-sidebar-muted: #cbd5e1;
+  --ui-sidebar-active: #164458;
+  --ui-sidebar-active-text: #a5f3fc;
+  --ui-sidebar-hover: #19384b;
+
+  --ui-banner: #0b2035;
+  --ui-banner-accent: #67e8f9;
+  --ui-banner-muted: #cbd5e1;
+}
+
+/* Tema oscuro: grises neutros, sin matices azulados. */
+:root.dark {
+  color-scheme: dark;
+  --ui-page: #0a0a0a;
+  --ui-panel: #171717;
+  --ui-panel-alt: #262626;
+  --ui-border: #404040;
+  --ui-main: #f5f5f5;
+  --ui-muted: #b5b5b5;
+  --ui-soft: #a3a3a3;
+  --ui-accent: #e5e5e5;
+  --ui-accent-soft: #262626;
+
+  --ui-sidebar: #0a0a0a;
+  --ui-sidebar-muted: #a3a3a3;
+  --ui-sidebar-active: #262626;
+  --ui-sidebar-active-text: #f5f5f5;
+  --ui-sidebar-hover: #171717;
+
+  --ui-banner: #171717;
+  --ui-banner-accent: #e5e5e5;
+  --ui-banner-muted: #a3a3a3;
+}
+
+body { margin: 0; min-width: 320px; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 3px; }
+
+/* Marcadores Leaflet: color semántico también en modo oscuro neutro. */
+.leaflet-overlay-pane .sismo-point {
+  stroke: var(--ui-accent);
+  fill: var(--ui-accent);
+}
+/* No ocultar controles ni atribución obligatoria de OpenStreetMap. */
+.leaflet-control-attribution { font-size: 11px; }

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0b2035" />
+  <meta name="description" content="Sistema informativo de monitoreo y análisis de sismos registrados en Perú." />
+  <!-- Aplica el tema guardado antes de montar React para evitar el destello de modo claro. -->
+  <script>
+    try {
+      if (localStorage.getItem('sismo-platform-theme') === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.style.colorScheme = 'dark';
+      }
+    } catch { /* El navegador puede bloquear localStorage. */ }
+  </script>
+  <title>Monitoreo Sísmico</title>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>

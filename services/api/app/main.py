@@ -1,0 +1,42 @@
+"""API FastAPI: eventos reales, fuentes y comprobaciones técnicas."""
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.core.config import settings
+from app.routes.events import router as events_router
+from app.routes.geo import router as geo_router
+from app.routes.analytics import analytics_router, dashboard_router
+from app.routes.exports import router as exports_router
+from app.routes.health import router as health_router
+from app.routes.sources import router as sources_router
+from app.routes.quality import quality_router, datasets_router
+
+app = FastAPI(
+    title=settings.app_name,
+    version="0.5.0",
+    description="Consulta de sismos ocurridos; sin predicción ni alertas oficiales.",
+)
+
+# La URL de Vercel se habilitará explícitamente al desplegar, nunca '*'.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173",
+                   *[origin.strip() for origin in settings.cors_origins.split(",")
+                     if origin.strip() and origin.strip() != "*"]],
+    allow_credentials=False,
+    allow_methods=["GET"],
+    allow_headers=["Content-Type"],
+)
+
+app.include_router(health_router, prefix="/api/v1")
+app.include_router(geo_router, prefix="/api/v1")
+app.include_router(events_router, prefix="/api/v1")
+app.include_router(dashboard_router, prefix="/api/v1")
+app.include_router(analytics_router, prefix="/api/v1")
+app.include_router(exports_router, prefix="/api/v1")
+app.include_router(sources_router, prefix="/api/v1")
+
+# Fase 5: consulta pública sin escritura hasta implementar autenticación y roles.
+app.include_router(quality_router, prefix="/api/v1")
+app.include_router(datasets_router, prefix="/api/v1")

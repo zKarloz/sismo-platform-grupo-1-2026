@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Activity, ArrowUpRight, ChevronLeft, ChevronRight, Filter, RefreshCw } from 'lucide-react';
 import { getEvents, type EventFilters } from '../../services/seismic';
 import type { EventPage } from '../../types/seismic';
+import IGPLivePanel from './IGPLivePanel';
 
 function localTime(iso: string) {
   return new Date(iso).toLocaleString('es-PE', { timeZone: 'America/Lima', dateStyle: 'short', timeStyle: 'short' });
@@ -52,10 +53,11 @@ export default function Page() {
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Fase 3 · Catálogo verificable</p>
           <h1 className="mt-2 text-3xl font-bold text-main">Eventos sísmicos</h1>
-          <p className="mt-2 text-sm text-muted">Sismos registrados en Supabase y consultados mediante FastAPI. Horas expresadas en Perú (UTC−5).</p>
+          <p className="mt-2 text-sm text-muted">Reportes recientes del IGP y, debajo, catálogo de eventos almacenados en Supabase. Horas de Perú (UTC−5).</p>
         </div>
         <button type="button" onClick={() => setRevision(v => v + 1)} className="inline-flex items-center gap-2 rounded-lg border border-border-ui bg-panel px-3 py-2 text-sm text-main hover:bg-panel-alt"><RefreshCw size={16} /> Actualizar</button>
       </div>
+      <IGPLivePanel />
       <form onSubmit={applyFilters} className="flex flex-wrap items-end gap-3 rounded-2xl border border-border-ui bg-panel p-4">
         <label className="flex flex-col gap-1 text-xs font-medium text-muted">Magnitud mínima
           <input type="number" step="0.1" min="-3" max="12" value={magnitudeInput} onChange={event => setMagnitudeInput(event.target.value)} placeholder="Todas" className="w-32 rounded-lg border border-border-ui bg-page px-3 py-2 text-sm text-main" />
@@ -70,7 +72,7 @@ export default function Page() {
       </form>
       <section className="overflow-hidden rounded-2xl border border-border-ui bg-panel">
         <div className="flex items-center justify-between border-b border-border-ui px-5 py-4">
-          <h2 className="font-semibold text-main">Registros observados</h2>
+          <h2 className="font-semibold text-main">Catálogo almacenado en Supabase (histórico USGS)</h2>
           <span className="text-xs text-muted">{data?.total ?? '—'} eventos</span>
         </div>
         {error && <p role="alert" className="m-4 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200">{error}. Comprueba FastAPI y Supabase.</p>}

@@ -23,13 +23,19 @@ class SyncResult:
 
 
 def sync_usgs(days: int = 7, min_magnitude: float = 2.5) -> SyncResult:
-    """Realiza una sincronización manual por CLI; NO exponer como POST público.
-
-    Se registran fallos externos en ingestion_runs. Si Supabase no responde,
-    puede no ser posible registrar el fallo: el comando retorna error.
-    """
+    """Sincronización reciente de Fase 3 (interfaz pública del comando existente)."""
     if not 1 <= days <= 90:
         raise ValueError("--days debe estar entre 1 y 90")
+    end = datetime.now(timezone.utc)
+    return sync_usgs_range(end - timedelta(days=days), end, min_magnitude)
+
+
+def sync_usgs_range(start: datetime, end: datetime, min_magnitude: float = 2.5) -> SyncResult:
+    """Bloque temporal para backfill: conserva historial y deduplicación existente."""
+    if start.tzinfo is None or end.tzinfo is None or start >= end:
+        raise ValueError("Fechas UTC inválidas")
+    if end - start > timedelta(days=90):
+        raise ValueError("Los bloques no pueden exceder 90 días")
     if not -3 <= min_magnitude <= 12:
         raise ValueError("--min-magnitude fuera de rango")
 
@@ -51,8 +57,6 @@ def sync_usgs(days: int = 7, min_magnitude: float = 2.5) -> SyncResult:
             .returning(runs.c.id)
         ).scalar_one()
 
-    end = datetime.now(timezone.utc)
-    start = end - timedelta(days=days)
     try:
         found = fetch_usgs_events(start, end, min_magnitude)
         inserted, updated_count = _write_events(engine, source_id, run_id, found)

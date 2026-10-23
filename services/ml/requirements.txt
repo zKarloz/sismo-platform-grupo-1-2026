@@ -1,0 +1,3 @@
+# Solo CLI local de laboratorio. No instalar en el servicio web de Render.
+# scikit-learn incorpora NumPy y SciPy como dependencias.
+scikit-learn>=1.6,<2.0

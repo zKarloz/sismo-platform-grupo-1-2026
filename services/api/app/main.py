@@ -11,10 +11,12 @@ from app.routes.exports import router as exports_router
 from app.routes.health import router as health_router
 from app.routes.sources import router as sources_router
 from app.routes.quality import quality_router, datasets_router
+from app.routes.ml import router as ml_router
+from app.routes.igp import router as igp_router
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.5.0",
+    version="0.6.0",
     description="Consulta de sismos ocurridos; sin predicción ni alertas oficiales.",
 )
 
@@ -40,3 +42,9 @@ app.include_router(sources_router, prefix="/api/v1")
 # Fase 5: consulta pública sin escritura hasta implementar autenticación y roles.
 app.include_router(quality_router, prefix="/api/v1")
 app.include_router(datasets_router, prefix="/api/v1")
+
+# Fase 6: métricas únicamente; entrenamiento privado por terminal.
+app.include_router(ml_router, prefix="/api/v1")
+
+# Consulta directa IGP de solo lectura; sin credenciales ni escrituras.
+app.include_router(igp_router, prefix="/api/v1")

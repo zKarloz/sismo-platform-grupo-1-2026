@@ -87,3 +87,24 @@ snapshot_rows = Table(
     Column("record", JSON, nullable=False),
     UniqueConstraint("dataset_id", "event_id", name="dataset_snapshots_dataset_event_uq"),
 )
+
+# Fase 6: tabla append-only de experimentos retrospectivos (migración 003).
+ml_experiments = Table(
+    "ml_experiments", metadata,
+    Column("id", Uuid(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")),
+    Column("dataset_id", Uuid(as_uuid=True), ForeignKey("public.datasets.id"), nullable=False),
+    Column("batch_id", Uuid(as_uuid=True), nullable=False),
+    Column("task_type", Text, nullable=False),
+    Column("algorithm", Text, nullable=False),
+    Column("target_name", Text, nullable=False),
+    Column("model_version", Text, nullable=False),
+    Column("features", JSON, nullable=False),
+    Column("params", JSON, nullable=False),
+    Column("metrics", JSON, nullable=False),
+    Column("validation_spec", JSON, nullable=False),
+    Column("dataset_sha256", Text, nullable=False),
+    Column("seed", Integer, nullable=False),
+    Column("limitations", Text, nullable=False),
+    Column("status", Text, nullable=False),
+    Column("created_at", DateTime(timezone=True)),
+)

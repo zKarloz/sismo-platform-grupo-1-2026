@@ -28,6 +28,31 @@ class IGPUnavailable(RuntimeError):
     """El servicio oficial no respondió dentro del tiempo permitido."""
 
 
+class IGPQueryResult(list):
+    """Lista compatible con la API existente, con diagnóstico de filas descartadas.
+
+    Estos metadatos son para la ingesta. No modifican el JSON público de IGP.
+    """
+
+    def __init__(self, records: list[dict], *, total: int, skipped: list[str]):
+        super().__init__(records)
+        self.total = total
+        self.skipped = skipped
+
+
+def _report_date(attrs: dict[str, Any]) -> date:
+    """Usar fechaevento si es válida; en caso contrario intentar fecha.
+
+    No se infiere una fecha a partir del reloj actual ni del OBJECTID.
+    """
+    for field in ("fechaevento", "fecha"):
+        try:
+            return _date(attrs.get(field))
+        except IGPFeedError:
+            pass
+    raise IGPFeedError("Fecha IGP inválida o ausente")
+
+
 def _date(value: Any) -> date:
     """Extrae la fecha de un campo ArcGIS Date, ISO o DD/MM/AAAA.
 
@@ -86,7 +111,7 @@ def normalize(feature: dict[str, Any], feed: str) -> dict[str, Any]:
     attrs = feature["attributes"]
     geom = feature.get("geometry") or {}
     if feed == "recent":
-        day = _date(attrs.get("fechaevento") or attrs.get("fecha"))
+        day = _report_date(attrs)
         clock = _time(attrs.get("hora"))
         latitude = _float(attrs.get("lat", geom.get("y")), "latitud", -90, 90)
         longitude = _float(attrs.get("lon", geom.get("x")), "longitud", -180, 180)
@@ -152,15 +177,23 @@ def query(feed: str, *, limit: int = 20, client: httpx.Client | None = None, str
     if not isinstance(features, list):
         raise IGPFeedError("La respuesta IGP no contiene features")
     results = []
+    skipped: list[str] = []
     for item in features:
         # Los registros incompletos se excluyen para no mostrar horas inventadas.
         try:
             results.append(normalize(item, feed))
-        except IGPFeedError:
+        except IGPFeedError as exc:
             if strict:
-                raise  # Ingesta: no silenciar registros oficiales incompletos.
+                raise
+            # Registrar el motivo sin copiar campos libres del proveedor.
+            attrs = item.get("attributes", {}) if isinstance(item, dict) else {}
+            if not isinstance(attrs, dict):
+                attrs = {}
+            raw_id = str(attrs.get("code") or attrs.get("objectid") or "desconocido")
+            safe_id = "".join(c for c in raw_id if c.isascii() and (c.isalnum() or c in "-_"))[:32]
+            skipped.append(f"{safe_id or 'desconocido'}: {exc}")
             continue
     if features and not results:
         raise IGPFeedError("Ningún reporte IGP cumple el contrato esperado")
     results.sort(key=lambda x: x["occurred_at"], reverse=True)
-    return results
+    return IGPQueryResult(results, total=len(features), skipped=skipped)

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -21,6 +22,13 @@ from app.igp.client import IGPFeedError, IGPUnavailable, IGP_REPORTS, query
 from app.ingestion.service import SyncResult
 
 SOURCE_NAME = "IGP/CENSIS"
+
+
+@dataclass(frozen=True)
+class IGPSyncResult(SyncResult):
+    """Mantiene la interfaz SyncResult e informa descartes de calidad."""
+    skipped: int = 0
+    processed: int = 0
 # Los reportes públicos poseen códigos año-correlativo (p. ej. 2026-0747).
 _REPORT_CODE = re.compile(r"^(\d{4})-(\d{1,6})$")
 
@@ -42,7 +50,7 @@ def _insert_for(engine, table):
     raise RuntimeError("Motor de base de datos no soportado para ingesta")
 
 
-def sync_igp(*, limit: int = 200, engine=None, fetch=None) -> SyncResult:
+def sync_igp(*, limit: int = 200, engine=None, fetch=None) -> IGPSyncResult:
     """Sincroniza una ventana de reportes recientes y registra el resultado.
 
     Ejecutar como comando CLI en Render Cron; no desde una ruta HTTP pública.
@@ -52,8 +60,9 @@ def sync_igp(*, limit: int = 200, engine=None, fetch=None) -> SyncResult:
     if not 1 <= limit <= 500:
         raise ValueError("--limit debe estar entre 1 y 500")
     engine = engine if engine is not None else get_engine()
-    # fetch inyectable para pruebas; el modo estricto impide éxitos silenciosos.
-    fetch = fetch if fetch is not None else (lambda amount: query("recent", limit=amount, strict=True))
+    # Una fila incompleta no bloquea todas las válidas. query conserva el motivo
+    # y sync_igp marca la ejecución como «partial» cuando existen descartes.
+    fetch = fetch if fetch is not None else (lambda amount: query("recent", limit=amount, strict=False))
 
     with engine.begin() as connection:
         insertion = _insert_for(engine, sources).values(
@@ -81,13 +90,20 @@ def sync_igp(*, limit: int = 200, engine=None, fetch=None) -> SyncResult:
         if not isinstance(received, list) or not received:
             raise IGPFeedError("No hay reportes válidos; se requiere revisar la fuente")
 
-        # Validar todos ANTES de la transacción de escritura: no hay parciales.
+        # Las filas inválidas se descartan sin inventar fechas o IDs; el estado
+        # del lote será «partial», nunca «success» si se perdió una fila.
+        total = int(getattr(received, "total", len(received)))
+        skipped_details = list(getattr(received, "skipped", []))
         unique: dict[str, dict] = {}
         for record in received:
-            code = _stable_code(record["external_id"])
-            occurred_at = datetime.fromisoformat(record["occurred_at"])
-            if occurred_at.tzinfo is None:
-                raise IGPFeedError("Fecha de evento IGP sin zona horaria")
+            try:
+                code = _stable_code(record["external_id"])
+                occurred_at = datetime.fromisoformat(record["occurred_at"])
+                if occurred_at.tzinfo is None:
+                    raise IGPFeedError("Fecha de evento IGP sin zona horaria")
+            except (IGPFeedError, KeyError, TypeError, ValueError) as exc:
+                skipped_details.append(f"Código/fecha inválidos: {type(exc).__name__}")
+                continue
             unique[code] = {
                 "source_id": source_id,
                 "external_id": code,
@@ -102,12 +118,24 @@ def sync_igp(*, limit: int = 200, engine=None, fetch=None) -> SyncResult:
                 "review_status": "unreviewed",  # No atribuir revisión científica no verificada.
             }
 
-        inserted, updated_count = _persist(engine, source_id, run_id, list(unique.values()), seen=len(received))
-        return SyncResult(
-            run_id=run_id, seen=len(received), inserted=inserted,
+        if not unique:
+            raise IGPFeedError("No hay reportes con fecha y código válidos para almacenar")
+        skipped_count = len(skipped_details)
+        status = "partial" if skipped_count else "success"
+        summary = None
+        if skipped_count:
+            # Resumen limitado: mensajes de validación, nunca datos privados.
+            examples = "; ".join(skipped_details[:3])
+            summary = f"Omitidos {skipped_count}/{total} reportes: {examples}"[:350]
+        inserted, updated_count = _persist(
+            engine, source_id, run_id, list(unique.values()),
+            seen=total, status=status, warning=summary,
+        )
+        return IGPSyncResult(
+            run_id=run_id, seen=total, inserted=inserted,
             updated=updated_count,
-            unchanged=len(received) - inserted - updated_count,
-            status="success",
+            unchanged=len(unique) - inserted - updated_count,
+            status=status, skipped=skipped_count, processed=len(unique),
         )
     except Exception as exc:
         # No incluir traceback, SQL, tokens o DATABASE_URL en error_summary.
@@ -126,7 +154,10 @@ def sync_igp(*, limit: int = 200, engine=None, fetch=None) -> SyncResult:
         raise
 
 
-def _persist(engine, source_id: UUID, run_id: UUID, records: list[dict], *, seen: int) -> tuple[int, int]:
+def _persist(
+    engine, source_id: UUID, run_id: UUID, records: list[dict],
+    *, seen: int, status: str = "success", warning: str | None = None,
+) -> tuple[int, int]:
     """Actualiza solo cambios observados, conserva IDs internos y snapshots ML."""
     with engine.begin() as connection:
         # Evita dobles carreras entre una ejecución manual y el cron de Render.
@@ -171,10 +202,12 @@ def _persist(engine, source_id: UUID, run_id: UUID, records: list[dict], *, seen
             revised += sum(code in existing_ids for code in changed)
 
         connection.execute(update(runs).where(runs.c.id == run_id).values(
-            status="success", finished_at=now, records_seen=seen,
+            status=status, finished_at=now, records_seen=seen,
             records_inserted=inserted, records_updated=revised,
+            error_summary=warning,
         ))
         connection.execute(update(sources).where(sources.c.id == source_id).values(
-            status="active", last_sync_at=now, last_success_at=now, updated_at=now,
+            status="active", last_sync_at=now, updated_at=now,
+            **({"last_success_at": now} if status == "success" else {}),
         ))
     return inserted, revised

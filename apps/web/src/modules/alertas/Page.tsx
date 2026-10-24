@@ -4,6 +4,8 @@ import { AlertTriangle, BellRing, CheckCircle2, Clock3, RefreshCw, ShieldAlert }
 import { activateAlertRule, getAlertHistory, getAlertRules, reviewAlert } from '../../services/alerts';
 import { useAuth } from '../../auth/AuthProvider';
 import type { AlertItem, AlertRule } from '../../services/alerts';
+import RuleBuilder from './RuleBuilder';
+import SmtpSettingsPanel from './SmtpSettingsPanel';
 
 const statuses = [
   {value: '', label: 'Todos los estados'},
@@ -66,11 +68,14 @@ export default function AlertasPage() {
       <p className="mt-1 text-muted">Las aprobaciones requieren un operador autenticado; las reglas solo las administra Administrador. La ingesta de GitHub Actions es horaria y puede retrasarse.</p>
     </section>
 
+    {isAdmin && <RuleBuilder onCreated={refresh}/>}
+    {isAdmin && <SmtpSettingsPanel recipient={profile?.email ?? ''}/>}
+
     {actionError && <p role="alert" className="rounded-lg border border-rose-400 p-3 text-sm text-rose-600 dark:text-rose-300">{actionError}</p>}
 
     <section aria-labelledby="rules-title" className="space-y-3">
       <div className="flex items-center justify-between gap-2"><h2 id="rules-title" className="text-xl font-semibold text-main">Reglas configuradas</h2><span className="text-xs text-muted">{rules.filter(rule => rule.enabled).length} activas · {rules.length} totales</span></div>
-      {rules.length === 0 && !loading && !error && <p className="rounded-xl border border-border-ui bg-panel p-5 text-sm text-muted">No hay reglas. Un operador autorizado puede crear una regla de prueba desde Git Bash.</p>}
+      {rules.length === 0 && !loading && !error && <p className="rounded-xl border border-border-ui bg-panel p-5 text-sm text-muted">No hay reglas. Un Administrador puede crear la primera regla con el formulario superior.</p>}
       <div className="grid gap-3 lg:grid-cols-2">{rules.map(rule => <article key={rule.id} className="rounded-xl border border-border-ui bg-panel p-4">
         <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold text-main">{rule.name}</h3><span className="rounded-full bg-panel-alt px-3 py-1 text-xs text-main">{rule.enabled ? 'Activa' : 'Desactivada'}</span></div>
         <p className="mt-2 text-xs text-muted">{rule.source_name ?? 'Sin fuente'} · Magnitud ≥ {Number(rule.min_magnitude).toFixed(1)} · Canal {rule.channel === 'in_app' ? 'Centro interno' : 'Correo (requiere aprobación)'}</p>

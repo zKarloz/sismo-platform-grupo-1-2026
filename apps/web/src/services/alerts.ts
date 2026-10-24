@@ -51,3 +51,35 @@ export const activateAlertRule = (id: string, enabled: boolean) =>
   apiAuthed<{ok:boolean}>(`/api/v1/admin/alert-rules/${id}/activation?enabled=${enabled}`, {method:'POST'});
 export const reviewAlert = (id:string, approve:boolean) =>
   apiAuthed<{ok:boolean}>(`/api/v1/admin/alerts/${id}/review?approve=${approve}`, {method:'POST'});
+
+
+// Creador autorizado de reglas; nunca transportar claves SMTP junto a la regla.
+export type CreateRulePayload = {
+  name: string;
+  min_magnitude: number;
+  source: 'IGP/CENSIS';
+  channel: 'in_app' | 'email';
+  destination: string | null;
+  severity: 'info' | 'review' | 'high';
+  requires_approval: boolean;
+  max_depth_km: number | null;
+  cooldown_seconds: number;
+  zone_spec: {min_lat: number; max_lat: number; min_lon: number; max_lon: number};
+  start_hour_peru: number | null;
+  end_hour_peru: number | null;
+  template_title: string;
+  template_body: string;
+};
+export const createAlertRule = (data: CreateRulePayload) =>
+  apiAuthed<{rule_id:string;enabled:boolean}>('/api/v1/admin/alert-rules', {
+    method:'POST', body:JSON.stringify(data),
+  });
+
+// Las credenciales Gmail NO se guardan en el navegador ni en Supabase.
+export const getSmtpStatus = () =>
+  apiAuthed<{configured:boolean;missing_variables:string[];note:string}>('/api/v1/admin/smtp/status');
+export const sendGmailTechnicalTest = (gmail: string, appPassword: string) =>
+  apiAuthed<{accepted_by_smtp:boolean;type:string;note:string}>('/api/v1/admin/smtp/gmail-test', {
+    method:'POST', body:JSON.stringify({gmail, app_password: appPassword}),
+    cache:'no-store',
+  });

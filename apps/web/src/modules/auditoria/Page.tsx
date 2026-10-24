@@ -26,6 +26,8 @@ const operations: Record<string, { title: string; category: Category; icon: Luci
   'identity.session.started': { title: 'Inicio de sesión', category: 'accesos', icon: LogIn },
   'identity.user.updated': { title: 'Permisos de usuario modificados', category: 'usuarios', icon: UsersRound },
   'alert.rule.created': { title: 'Regla de alertas creada', category: 'reglas', icon: Settings2 },
+  'alert.smtp.test.requested': { title: 'Prueba de Gmail solicitada', category: 'sistema', icon: Activity },
+  'alert.smtp.test.accepted': { title: 'Prueba de Gmail aceptada por SMTP', category: 'sistema', icon: CheckCircle2 },
   'alert.rule.activated': { title: 'Regla de alertas activada', category: 'reglas', icon: ShieldCheck },
   'alert.rule.disabled': { title: 'Regla de alertas desactivada', category: 'reglas', icon: Settings2 },
   'alert.generated': { title: 'Aviso informativo generado', category: 'alertas', icon: BellRing },
@@ -69,6 +71,8 @@ function describe(entry: Entry): string {
       .map((key) => `${fieldNames[key]}: ${prettyValue(key, before[key])} → ${prettyValue(key, after[key])}`);
     return changes.length ? changes.join(' · ') : 'Se actualizaron los permisos de una cuenta.';
   }
+  if (entry.action === 'alert.smtp.test.requested') return 'Un Administrador solicitó una prueba técnica de Gmail. No se guardan credenciales.';
+  if (entry.action === 'alert.smtp.test.accepted') return 'Gmail aceptó el mensaje de prueba; no es una alerta sísmica.';
   if (entry.action === 'alert.rule.created') {
     const source = typeof after.source === 'string' ? after.source : null;
     const channel = after.channel ? prettyValue('channel', after.channel) : null;

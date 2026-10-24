@@ -72,3 +72,17 @@ jobs:
             echo '### IGP: sincronización completada' >> "$GITHUB_STEP_SUMMARY"
             echo 'Revisar el detalle de registros y fecha en ingestion_runs.' >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      - name: Evaluar reglas sobre sismos reportados
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          # No evalúa eventos de antes de la activación ni datos con más de 24 h.
+          python -m app.commands.alerts evaluate
+
+      - name: Publicar avisos internos aprobados
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          # No realiza envíos externos ni salta aprobación humana.
+          python -m app.commands.alerts dispatch

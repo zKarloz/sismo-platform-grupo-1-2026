@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     database_url: str | None = None
     # CORS_ORIGINS=https://mi-app.vercel.app; separar dominios adicionales por comas.
     cors_origins: str = ""
+    # Solo servidor: URL y API key pública para validar tokens Supabase Auth.
+    supabase_url: str = ""
+    supabase_publishable_key: str = ""
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env", env_file_encoding="utf-8", extra="ignore",

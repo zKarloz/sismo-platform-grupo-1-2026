@@ -16,7 +16,7 @@ from app.routes.igp import router as igp_router
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.6.0",
+    version="0.7.0",
     description="Consulta de sismos ocurridos; sin predicción ni alertas oficiales.",
 )
 
@@ -27,8 +27,9 @@ app.add_middleware(
                    *[origin.strip() for origin in settings.cors_origins.split(",")
                      if origin.strip() and origin.strip() != "*"]],
     allow_credentials=False,
-    allow_methods=["GET"],
-    allow_headers=["Content-Type"],
+    # Authorization Bearer en SPA; sin cookies compartidas ni wildcard de origen.
+    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 app.include_router(health_router, prefix="/api/v1")
@@ -48,3 +49,13 @@ app.include_router(ml_router, prefix="/api/v1")
 
 # Consulta directa IGP de solo lectura; sin credenciales ni escrituras.
 app.include_router(igp_router, prefix="/api/v1")
+
+# Fase 7: lectura pública de avisos informativos; ningún endpoint de escritura.
+from app.routes.alerts import router as alerts_router
+app.include_router(alerts_router, prefix="/api/v1")
+
+# Fase 2: sesiones Supabase Auth, RBAC y auditoría en endpoints administrativos.
+from app.routes.identity import router as identity_router
+from app.routes.alert_admin import router as alert_admin_router
+app.include_router(identity_router, prefix="/api/v1")
+app.include_router(alert_admin_router, prefix="/api/v1")

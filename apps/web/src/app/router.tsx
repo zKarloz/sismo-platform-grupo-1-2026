@@ -3,6 +3,7 @@ import { createBrowserRouter } from 'react-router-dom';
 import AppLayout from './AppLayout';
 import {RequireRole, RequireSession} from '../auth/ProtectedRoute';
 import LoginPage from '../modules/login/LoginPage';
+import SetPasswordPage from '../modules/login/SetPasswordPage';
 import DashboardPage from '../modules/dashboard/DashboardPage';
 import EventosPage from '../modules/eventos/Page';
 import MapaPage from '../modules/mapa-sismico/Page';
@@ -14,8 +15,10 @@ import FuentesPage from '../modules/fuentes-datos/Page';
 import ReportesPage from '../modules/reportes/Page';
 import UsuariosPage from '../modules/usuarios-roles/Page';
 import AuditoriaPage from '../modules/auditoria/Page';
+import MisNotificacionesPage from '../modules/mis-notificaciones/Page';
 
-export const router = createBrowserRouter([{ path: '/login', element: <LoginPage /> }, {
+export const router = createBrowserRouter([{ path: '/login', element: <LoginPage /> },
+  { path: '/establecer-clave', element: <SetPasswordPage /> }, {
   path: '/', element: <RequireSession><AppLayout /></RequireSession>,
   children: [
     { index: true, element: <DashboardPage /> },
@@ -25,6 +28,7 @@ export const router = createBrowserRouter([{ path: '/login', element: <LoginPage
     { path: 'calidad-datos', element: <CalidadPage /> },
     { path: 'modelos-ml', element: <ModelosPage /> },
     { path: 'alertas', element: <AlertasPage /> },
+    { path: 'mis-notificaciones', element: <MisNotificacionesPage /> },
     { path: 'fuentes-datos', element: <FuentesPage /> },
     { path: 'reportes', element: <ReportesPage /> },
     { element: <RequireRole roles={['administrador', 'auditor']} />, children: [

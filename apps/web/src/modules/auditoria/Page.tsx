@@ -24,6 +24,8 @@ type Entry = {
 type Category = 'accesos' | 'usuarios' | 'reglas' | 'alertas' | 'sistema';
 const operations: Record<string, { title: string; category: Category; icon: LucideIcon }> = {
   'identity.session.started': { title: 'Inicio de sesión', category: 'accesos', icon: LogIn },
+  'identity.user.invited': { title: 'Invitación de usuario creada', category: 'usuarios', icon: UsersRound },
+  'identity.user.demo_created': { title: 'Cuenta de demostración creada', category: 'usuarios', icon: UsersRound },
   'identity.user.updated': { title: 'Permisos de usuario modificados', category: 'usuarios', icon: UsersRound },
   'alert.rule.created': { title: 'Regla de alertas creada', category: 'reglas', icon: Settings2 },
   'alert.smtp.test.requested': { title: 'Prueba de Gmail solicitada', category: 'sistema', icon: Activity },
@@ -36,6 +38,9 @@ const operations: Record<string, { title: string; category: Category; icon: Luci
   'alert.delivery.sent': { title: 'Aviso publicado', category: 'alertas', icon: BellRing },
   'alert.delivery.failed': { title: 'Falló la publicación de un aviso', category: 'alertas', icon: XCircle },
   'alert.delivery.acknowledged': { title: 'Recepción de aviso confirmada', category: 'alertas', icon: CheckCircle2 },
+  'notification.preference.updated': { title: 'Preferencias de correo actualizadas', category: 'usuarios', icon: Settings2 },
+  'notification.delivery.sent': { title: 'Correo personal aceptado por SMTP', category: 'alertas', icon: CheckCircle2 },
+  'notification.delivery.failed': { title: 'Falló un correo personal', category: 'alertas', icon: XCircle },
 };
 
 const statusNames: Record<string, string> = {
@@ -58,7 +63,7 @@ function prettyValue(key: string, value: unknown): string {
 }
 const fieldNames: Record<string, string> = {
   role: 'Rol', status: 'Estado', enabled: 'Activada',
-  source: 'Fuente', channel: 'Canal', attempts: 'Intentos',
+  source: 'Fuente', channel: 'Canal', attempts: 'Intentos', min_magnitude: 'Magnitud mínima',
   severity: 'Prioridad', requires_approval: 'Requiere aprobación',
 };
 
@@ -66,6 +71,8 @@ function describe(entry: Entry): string {
   const before = entry.before_json ?? {};
   const after = entry.after_json ?? {};
   if (entry.action === 'identity.session.started') return 'Acceso autenticado mediante Supabase Auth.';
+  if (entry.action === 'identity.user.invited') return 'Se creó una invitación y se vinculó la nueva cuenta al rol asignado.';
+  if (entry.action === 'identity.user.demo_created') return 'Se registró una cuenta ficticia de demostración autorizada.';
   if (entry.action === 'identity.user.updated') {
     const changes = Object.keys(after).filter((key) => key in fieldNames && before[key] !== after[key])
       .map((key) => `${fieldNames[key]}: ${prettyValue(key, before[key])} → ${prettyValue(key, after[key])}`);
@@ -86,6 +93,9 @@ function describe(entry: Entry): string {
   if (entry.action === 'alert.delivery.sent') return 'La publicación del aviso quedó registrada.';
   if (entry.action === 'alert.delivery.failed') return 'Hubo un problema en un intento de publicación.';
   if (entry.action === 'alert.delivery.acknowledged') return 'Un operador registró un acuse del aviso.';
+  if (entry.action === 'notification.preference.updated') return 'La persona actualizó su suscripción de avisos por correo y el umbral elegido.';
+  if (entry.action === 'notification.delivery.sent') return 'El proveedor SMTP aceptó un correo personal sobre un sismo IGP ya publicado.';
+  if (entry.action === 'notification.delivery.failed') return 'Falló un intento de envío personal; se aplicarán reintentos limitados.';
   return 'Operación registrada en la bitácora del sistema.';
 }
 
@@ -159,7 +169,7 @@ export default function Page() {
           const Icon = operation.icon;
           const actorName = item.actor_id ? (item.actor_name || 'Usuario no disponible') : 'Sistema automatizado';
           const actorRole = item.actor_id ? (item.actor_role ? displayRole(item.actor_role) : 'Rol no disponible') : 'Proceso automático';
-          const subject = item.entity_type === 'users' && item.action === 'identity.user.updated' && item.subject_name
+          const subject = item.entity_type === 'users' && ['identity.user.updated', 'identity.user.invited', 'identity.user.demo_created'].includes(item.action) && item.subject_name
             ? `Cuenta afectada: ${item.subject_name}` : null;
           return (
             <article key={item.id} className="rounded-xl border border-border-ui bg-panel p-4 shadow-sm sm:p-5">

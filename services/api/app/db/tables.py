@@ -192,3 +192,29 @@ audit_logs = Table(
     Column('correlation_id', Uuid(as_uuid=True)),
     Column('occurred_at', DateTime(timezone=True)),
 )
+
+# Preferencias personales de correo y entregas por usuario. Migración 006.
+# No se mezclan con las reglas globales/alert_deliveries ni con ML.
+notification_preferences = Table(
+    'notification_preferences', metadata,
+    Column('user_id', Uuid(as_uuid=True), ForeignKey('public.users.id'), primary_key=True),
+    Column('enabled', Boolean, nullable=False),
+    Column('source_id', Uuid(as_uuid=True), ForeignKey('public.data_sources.id'), nullable=False),
+    Column('min_magnitude', Numeric(4, 1), nullable=False),
+    Column('activated_at', DateTime(timezone=True)),
+    Column('updated_at', DateTime(timezone=True)),
+)
+personal_deliveries = Table(
+    'personal_notification_deliveries', metadata,
+    Column('id', Uuid(as_uuid=True), primary_key=True, server_default=text('gen_random_uuid()')),
+    Column('user_id', Uuid(as_uuid=True), ForeignKey('public.users.id'), nullable=False),
+    Column('event_id', Uuid(as_uuid=True), ForeignKey('public.seismic_events.id'), nullable=False),
+    Column('status', Text, nullable=False),
+    Column('attempts', Integer, nullable=False),
+    Column('created_at', DateTime(timezone=True)),
+    Column('last_attempt_at', DateTime(timezone=True)),
+    Column('next_attempt_at', DateTime(timezone=True)),
+    Column('sent_at', DateTime(timezone=True)),
+    Column('error_code', Text),
+    UniqueConstraint('user_id', 'event_id', name='personal_notification_unique'),
+)

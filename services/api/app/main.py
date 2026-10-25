@@ -59,3 +59,7 @@ from app.routes.identity import router as identity_router
 from app.routes.alert_admin import router as alert_admin_router
 app.include_router(identity_router, prefix="/api/v1")
 app.include_router(alert_admin_router, prefix="/api/v1")
+
+# Fase 7: preferencias individuales autenticadas, sin endpoints de envío público.
+from app.routes.personal_notifications import router as personal_notifications_router
+app.include_router(personal_notifications_router, prefix="/api/v1")

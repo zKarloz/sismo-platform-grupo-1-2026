@@ -86,3 +86,31 @@ jobs:
         run: |
           # No realiza envíos externos ni salta aprobación humana.
           python -m app.commands.alerts dispatch
+
+      - name: Preparar avisos personales de cuentas suscritas
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          # No envía correos; crea una cola idempotente por usuario y evento.
+          python -m app.commands.personal_notifications evaluate
+
+      - name: Enviar correos personales (solo con habilitación explícita)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ENABLE_PERSONAL_EMAIL: ${{ vars.ENABLE_PERSONAL_EMAIL }}
+          ALERT_SMTP_HOST: ${{ secrets.ALERT_SMTP_HOST }}
+          ALERT_SMTP_PORT: ${{ vars.ALERT_SMTP_PORT || '465' }}
+          ALERT_SMTP_FROM: ${{ secrets.ALERT_SMTP_FROM }}
+          ALERT_SMTP_USER: ${{ secrets.ALERT_SMTP_USER }}
+          ALERT_SMTP_PASSWORD: ${{ secrets.ALERT_SMTP_PASSWORD }}
+        run: |
+          # No requiere ni expone contraseña si el operador no activó el canal.
+          if [ "$ENABLE_PERSONAL_EMAIL" != 'true' ]; then
+            echo 'Envíos personales deshabilitados; solo se generó la cola.'
+            exit 0
+          fi
+          if [ -z "$ALERT_SMTP_HOST" ] || [ -z "$ALERT_SMTP_FROM" ] || [ -z "$ALERT_SMTP_USER" ] || [ -z "$ALERT_SMTP_PASSWORD" ]; then
+            echo '::error::Faltan credenciales SMTP privadas para el envío personal.'
+            exit 1
+          fi
+          python -m app.commands.personal_notifications dispatch --send-email

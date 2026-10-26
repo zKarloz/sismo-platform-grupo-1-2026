@@ -417,17 +417,36 @@ def get_catalog(*, refresh: bool = False) -> Catalog:
 
 
 def select_events(catalog: Catalog, *, year_from: int, year_to: int,
+                  start_at: datetime | None = None, end_at: datetime | None = None,
                   min_magnitude: float | None = None, max_depth: float | None = None,
                   south: float | None = None, west: float | None = None,
                   north: float | None = None, east: float | None = None) -> list[dict]:
-    """Filtrado determinista. Coordenadas WGS84, no recorte político de Perú."""
+    """Filtrar por intervalo exacto UTC, o por años para clientes anteriores.
+
+    ``end_at`` es inclusivo. El frontend envía el último microsegundo del minuto
+    elegido, evitando omitir eventos con segundos dentro del minuto final.
+    Este catálogo histórico nunca ingresa a la tabla de alertas operativas.
+    """
     selected = []
+    precise = start_at is not None and end_at is not None
+    if precise:
+        lower = start_at.astimezone(timezone.utc)
+        upper = end_at.astimezone(timezone.utc)
     for event in catalog.events:
-        year = int(event['fecha_utc'][:4])
-        if not year_from <= year <= year_to:continue
-        if min_magnitude is not None and event['magnitud'] < min_magnitude:continue
-        if max_depth is not None and event['profundidad_km'] > max_depth:continue
-        if south is not None and not(south <= event['latitud'] <= north
-                                     and west <= event['longitud'] <= east):continue
+        if precise:
+            event_time = datetime.fromisoformat(event['fecha_utc'])
+            if not lower <= event_time <= upper:
+                continue
+        else:
+            year = int(event['fecha_utc'][:4])
+            if not year_from <= year <= year_to:
+                continue
+        if min_magnitude is not None and event['magnitud'] < min_magnitude:
+            continue
+        if max_depth is not None and event['profundidad_km'] > max_depth:
+            continue
+        if south is not None and not (south <= event['latitud'] <= north
+                                      and west <= event['longitud'] <= east):
+            continue
         selected.append(event)
     return selected

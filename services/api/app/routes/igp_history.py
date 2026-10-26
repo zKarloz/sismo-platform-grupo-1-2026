@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -30,6 +30,9 @@ class Filters(BaseModel):
     model_config = ConfigDict(extra='forbid')
     year_from: int = Field(default=2020,ge=1960,le=2025)
     year_to: int = Field(default=2025,ge=1960,le=2025)
+    # Rango horario UTC opcional: si se especifica, prevalece sobre el año.
+    start_at: datetime | None = None
+    end_at: datetime | None = None
     min_magnitude: float | None = Field(default=None,ge=0,le=10)
     max_depth: float | None = Field(default=None,ge=0,le=900)
     south: float | None = Field(default=None,ge=-90,le=90)
@@ -41,6 +44,18 @@ class Filters(BaseModel):
     def validate_range(self):
         if self.year_from > self.year_to:
             raise ValueError('Años invertidos')
+        if (self.start_at is None) != (self.end_at is None):
+            raise ValueError('Indica fecha y hora inicial y final')
+        if self.start_at is not None and self.end_at is not None:
+            if self.start_at.utcoffset() is None or self.end_at.utcoffset() is None:
+                raise ValueError('Indica explícitamente la zona horaria UTC')
+            start_utc = self.start_at.astimezone(timezone.utc)
+            end_utc = self.end_at.astimezone(timezone.utc)
+            if start_utc > end_utc:
+                raise ValueError('La fecha inicial no puede superar a la final')
+            if (start_utc < datetime(1960, 1, 1, tzinfo=timezone.utc)
+                    or end_utc >= datetime(2026, 1, 1, tzinfo=timezone.utc)):
+                raise ValueError('El período debe estar entre 1960 y 2025 UTC')
         area = (self.south,self.west,self.north,self.east)
         if any(value is not None for value in area):
             if any(value is None for value in area) or self.south > self.north or self.west > self.east:
@@ -92,6 +107,8 @@ def source_info(catalog) -> dict:
 @router.get('/events')
 def history_events(year_from: int = Query(2020,ge=1960,le=2025),
                    year_to: int = Query(2025,ge=1960,le=2025),
+                   start_at: datetime | None = Query(None),
+                   end_at: datetime | None = Query(None),
                    min_magnitude: float | None = Query(None,ge=0,le=10),
                    max_depth: float | None = Query(None,ge=0,le=900),
                    south: float | None = Query(None,ge=-90,le=90),
@@ -100,8 +117,14 @@ def history_events(year_from: int = Query(2020,ge=1960,le=2025),
                    east: float | None = Query(None,ge=-180,le=180),
                    page: int = Query(1,ge=1), page_size: int = Query(20,ge=5,le=50),
                    principal: Principal = Depends(require_user)) -> dict:
-    filters=Filters(year_from=year_from,year_to=year_to,min_magnitude=min_magnitude,
-                    max_depth=max_depth,south=south,west=west,north=north,east=east)
+    try:
+        filters=Filters(year_from=year_from,year_to=year_to,
+                        start_at=start_at,end_at=end_at,
+                        min_magnitude=min_magnitude,max_depth=max_depth,
+                        south=south,west=west,north=north,east=east)
+    except ValidationError as exc:
+        # Errores de rango del usuario son 422, nunca un 500 del servidor.
+        raise HTTPException(422, '; '.join(item['msg'] for item in exc.errors())) from None
     catalog = catalog_or_503()
     data = select_events(catalog,**filters.model_dump())
     start=(page-1)*page_size
@@ -133,12 +156,14 @@ def history_export(data: ExportRequest,principal: Principal = Depends(require_us
                   f'consultado {catalog.retrieved_at.isoformat()} | recurso oficial: {resource}')
             binary,media=render_file('events',data.format,rows,cutoff,source_note=note)
             identifier=uuid4()
-            filename=f'igp_historico_{data.year_from}_{data.year_to}_{str(identifier)[:8]}.{data.format}'
+            begin_year = data.start_at.year if data.start_at else data.year_from
+            finish_year = data.end_at.year if data.end_at else data.year_to
+            filename=f'igp_historico_{begin_year}_{finish_year}_{str(identifier)[:8]}.{data.format}'
             # report_type=events satisface constraint existente; el subtipo y hash
             # de versión están disponibles en filters, nunca se mezclan con USGS.
             conn.execute(report_exports.insert().values(
                 id=identifier,requester_id=principal.id,
-                report_name=data.name.strip() or f'IGP instrumental {data.year_from}–{data.year_to}',
+                report_name=data.name.strip() or f'IGP instrumental {begin_year}–{finish_year}',
                 report_type='events',file_format=data.format,
                 filters={**filters,'catalog':'IGP histórico 1960–2025',
                          'source_resource':resource,'source_version_sha256':catalog.sha256,

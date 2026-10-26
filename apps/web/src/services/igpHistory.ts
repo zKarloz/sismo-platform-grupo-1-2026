@@ -4,7 +4,10 @@ import { authClient } from '../auth/client';
 
 const API = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
 export type HistoryFilters = {
-  year_from: number; year_to: number; min_magnitude?: number; max_depth?: number;
+  // Ambos extremos son UTC explícito; se usan con precisión de minutos al consultar.
+  start_at?: string; end_at?: string;
+  year_from?: number; year_to?: number;
+  min_magnitude?: number; max_depth?: number;
   south?: number; west?: number; north?: number; east?: number;
 };
 export type HistoryEvent = {id:string; fecha_utc:string; magnitud:number; profundidad_km:number;

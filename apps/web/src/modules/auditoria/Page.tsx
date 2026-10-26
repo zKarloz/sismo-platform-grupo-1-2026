@@ -40,6 +40,11 @@ const operations: Record<string, { title: string; category: Category; icon: Luci
   'alert.delivery.acknowledged': { title: 'Recepción de aviso confirmada', category: 'alertas', icon: CheckCircle2 },
   'notification.preference.updated': { title: 'Preferencias de correo actualizadas', category: 'usuarios', icon: Settings2 },
   'notification.delivery.sent': { title: 'Correo personal aceptado por SMTP', category: 'alertas', icon: CheckCircle2 },
+  'report.export.generated': { title: 'Reporte descargado', category: 'sistema', icon: CheckCircle2 },
+  'report.legacy_csv.generated': { title: 'Eventos CSV exportados', category: 'sistema', icon: CheckCircle2 },
+  'audit.export.generated': { title: 'Historial de auditoría exportado', category: 'sistema', icon: ShieldCheck },
+  'system.setting.changed': { title: 'Configuración operativa actualizada', category: 'sistema', icon: Settings2 },
+  'report.history.pruned': { title: 'Retención de reportes aplicada', category: 'sistema', icon: History },
   'notification.delivery.failed': { title: 'Falló un correo personal', category: 'alertas', icon: XCircle },
 };
 
@@ -78,6 +83,10 @@ function describe(entry: Entry): string {
       .map((key) => `${fieldNames[key]}: ${prettyValue(key, before[key])} → ${prettyValue(key, after[key])}`);
     return changes.length ? changes.join(' · ') : 'Se actualizaron los permisos de una cuenta.';
   }
+  if (entry.action === 'report.export.generated') return 'Un usuario autorizado generó un informe con fecha de corte y huella digital.';
+  if (entry.action === 'system.setting.changed') return 'Se actualizó un parámetro operativo no secreto.';
+  if (entry.action === 'audit.export.generated') return 'Se exportó una copia controlada del historial de auditoría.';
+  if (entry.action === 'report.history.pruned') return 'Se purgaron metadatos vencidos de exportaciones; se conserva esta bitácora.';
   if (entry.action === 'alert.smtp.test.requested') return 'Un Administrador solicitó una prueba técnica de Gmail. No se guardan credenciales.';
   if (entry.action === 'alert.smtp.test.accepted') return 'Gmail aceptó el mensaje de prueba; no es una alerta sísmica.';
   if (entry.action === 'alert.rule.created') {

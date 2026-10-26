@@ -10,7 +10,8 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.session import get_read_engine
-from app.db.tables import events, sources
+from app.db.tables import events, sources, audit_logs
+from app.auth.security import Principal, require_roles
 from app.routes.filters import SeismicFilters, get_filters
 
 router = APIRouter(prefix="/analytics", tags=["Exportaciones"])
@@ -29,6 +30,7 @@ def csv_safe(value) -> str:
 @router.get("/export.csv")
 def export_events_csv(
     filters: SeismicFilters = Depends(get_filters), engine: Engine = Depends(get_read_engine),
+    principal: Principal = Depends(require_roles('administrador','analista','operador_alertas','auditor')),
 ) -> Response:
     """Exporta resultados filtrados más recientes; indica si fueron truncados."""
     try:
@@ -43,6 +45,14 @@ def export_events_csv(
             ).all()
     except SQLAlchemyError:
         raise HTTPException(503, "Exportación temporalmente no disponible") from None
+    # Compatibilidad con CSV de fases anteriores: también exigir sesión y auditar.
+    try:
+        with engine.begin() as conn:
+            conn.execute(audit_logs.insert().values(actor_id=principal.id, action='report.legacy_csv.generated',
+                entity_type='seismic_events',after_json={'rows':len(rows),
+                    'truncated': total > len(rows), 'source':filters.source},result='success'))
+    except SQLAlchemyError:
+        raise HTTPException(503, 'No se pudo auditar la exportación') from None
     output = StringIO()
     writer = csv.writer(output)
     writer.writerow(["fecha_utc", "magnitud", "tipo_magnitud", "profundidad_km",

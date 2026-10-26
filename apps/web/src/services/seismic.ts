@@ -9,7 +9,7 @@ async function readJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await response.json()) as T;
 }
 
-export type EventFilters = { page?: number; page_size?: number; min_magnitude?: number; start_time?: string; end_time?: string };
+export type EventFilters = { page?: number; page_size?: number; min_magnitude?: number; start_time?: string; end_time?: string; source?: string };
 
 export function getEvents(filters: EventFilters = {}, signal?: AbortSignal): Promise<EventPage> {
   const query = new URLSearchParams();

@@ -1,4 +1,5 @@
 /** Todos los componentes consultan FastAPI; nunca se conecta React a Supabase. */
+import { authClient } from '../auth/client';
 import type {
   AnalyticsFilters, GeoDataset, MagnitudeDistribution,
   ScatterDataset, Summary, TimeSeries,
@@ -29,7 +30,11 @@ export const getMapEvents = (filters: AnalyticsFilters, signal?: AbortSignal) =>
 
 /** Descarga en el navegador, sin exponer secretos ni codificar datos ficticios. */
 export async function downloadEventsCsv(filters: AnalyticsFilters): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/v1/analytics/export.csv?${filterQuery(filters)}`);
+  const {data} = await authClient?.auth.getSession() ?? {data:{session:null}};
+  if (!data.session) throw new Error('Inicia sesión para exportar datos');
+  const response = await fetch(`${API_BASE}/api/v1/analytics/export.csv?${filterQuery(filters)}`, {
+    headers: {Authorization: `Bearer ${data.session.access_token}`}
+  });
   if (!response.ok) throw new Error(`Error al exportar CSV (${response.status})`);
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);

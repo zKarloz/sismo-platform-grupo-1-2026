@@ -63,3 +63,8 @@ app.include_router(alert_admin_router, prefix="/api/v1")
 # Fase 7: preferencias individuales autenticadas, sin endpoints de envío público.
 from app.routes.personal_notifications import router as personal_notifications_router
 app.include_router(personal_notifications_router, prefix="/api/v1")
+
+# Fase 8: reportes privados con RBAC; configuración y exportación de auditoría.
+from app.routes.reports import router as reports_router, admin_router as system_admin_router
+app.include_router(reports_router, prefix='/api/v1')
+app.include_router(system_admin_router, prefix='/api/v1')

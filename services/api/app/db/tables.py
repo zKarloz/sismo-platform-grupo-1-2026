@@ -218,3 +218,30 @@ personal_deliveries = Table(
     Column('error_code', Text),
     UniqueConstraint('user_id', 'event_id', name='personal_notification_unique'),
 )
+
+# Fase 8: registro de descargas generado por servidor y parámetros no secretos.
+report_exports = Table(
+    'report_exports', metadata,
+    Column('id', Uuid(as_uuid=True), primary_key=True, server_default=text('gen_random_uuid()')),
+    Column('requester_id', Uuid(as_uuid=True), ForeignKey('public.users.id'), nullable=False),
+    Column('report_name', Text, nullable=False),
+    Column('report_type', Text, nullable=False),
+    Column('file_format', Text, nullable=False),
+    Column('filters', JSON, nullable=False),
+    Column('cutoff_at', DateTime(timezone=True), nullable=False),
+    Column('created_at', DateTime(timezone=True)),
+    Column('status', Text, nullable=False),
+    Column('row_count', Integer, nullable=False),
+    Column('byte_count', Integer, nullable=False),
+    Column('content_sha256', Text),
+    Column('filename', Text),
+    Column('temp_path', Text),
+    Column('expires_at', DateTime(timezone=True)),
+)
+system_settings = Table(
+    'system_settings', metadata,
+    Column('key', Text, primary_key=True),
+    Column('value_int', Integer, nullable=False),
+    Column('updated_at', DateTime(timezone=True)),
+    Column('updated_by', Uuid(as_uuid=True), ForeignKey('public.users.id')),
+)

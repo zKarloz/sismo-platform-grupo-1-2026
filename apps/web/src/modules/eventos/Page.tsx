@@ -5,6 +5,21 @@ import { getEvents, type EventFilters } from '../../services/seismic';
 import type { EventPage } from '../../types/seismic';
 import IGPLivePanel from './IGPLivePanel';
 
+// Solo enlazar fichas por código IGP validado; para USGS usar el enlace almacenado.
+function officialLink(source: string, externalId: string, storedUrl: string): string | null {
+  if (source === 'IGP/CENSIS') {
+    return /^\d{4}-\d{4,6}$/.test(externalId)
+      ? `https://ultimosismo.igp.gob.pe/evento/${externalId}`
+      : 'https://ultimosismo.igp.gob.pe/productos/reportes-sismicos';
+  }
+  try {
+    const url = new URL(storedUrl);
+    return url.protocol === 'https:' && url.hostname.endsWith('.usgs.gov') ? url.href : null;
+  } catch { return null; }
+}
+
+function utcTime(iso: string) { return new Date(iso).toISOString().replace('.000Z', 'Z'); }
+
 function localTime(iso: string) {
   return new Date(iso).toLocaleString('es-PE', { timeZone: 'America/Lima', dateStyle: 'short', timeStyle: 'short' });
 }
@@ -12,9 +27,10 @@ function localTime(iso: string) {
 export default function Page() {
   const [page, setPage] = useState(1);
   const [magnitudeInput, setMagnitudeInput] = useState('');
+  const [sourceInput, setSourceInput] = useState('IGP/CENSIS');
   const [fromInput, setFromInput] = useState('');
   const [toInput, setToInput] = useState('');
-  const [filters, setFilters] = useState<Omit<EventFilters, 'page' | 'page_size'>>({});
+  const [filters, setFilters] = useState<Omit<EventFilters, 'page' | 'page_size'>>({ source: 'IGP/CENSIS' });
   const [data, setData] = useState<EventPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -42,6 +58,7 @@ export default function Page() {
     setPage(1);
     setFilters({
       ...(magnitudeInput !== '' ? { min_magnitude: Number(magnitudeInput) } : {}),
+      ...(sourceInput ? { source: sourceInput } : {}),
       ...(fromInput ? { start_time: `${fromInput}T00:00:00Z` } : {}),
       ...(toInput ? { end_time: `${toInput}T23:59:59Z` } : {}),
     });
@@ -53,12 +70,19 @@ export default function Page() {
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Fase 3 · Catálogo verificable</p>
           <h1 className="mt-2 text-3xl font-bold text-main">Eventos sísmicos</h1>
-          <p className="mt-2 text-sm text-muted">Reportes recientes del IGP y, debajo, catálogo de eventos almacenados en Supabase. Horas de Perú (UTC−5).</p>
+          <p className="mt-2 text-sm text-muted">Reportes publicados por IGP y catálogo persistido en Supabase. La tabla muestra fecha UTC y enlaces a cada ficha oficial cuando existe.</p>
         </div>
         <button type="button" onClick={() => setRevision(v => v + 1)} className="inline-flex items-center gap-2 rounded-lg border border-border-ui bg-panel px-3 py-2 text-sm text-main hover:bg-panel-alt"><RefreshCw size={16} /> Actualizar</button>
       </div>
       <IGPLivePanel />
       <form onSubmit={applyFilters} className="flex flex-wrap items-end gap-3 rounded-2xl border border-border-ui bg-panel p-4">
+        <label className="flex flex-col gap-1 text-xs font-medium text-muted">Fuente
+          <select value={sourceInput} onChange={e => setSourceInput(e.target.value)} className="rounded-lg border border-border-ui bg-page px-3 py-2 text-sm text-main">
+            <option value="IGP/CENSIS">IGP/CENSIS (caché)</option>
+            <option value="USGS">USGS (histórico complementario)</option>
+            <option value="">Todas las fuentes</option>
+          </select>
+        </label>
         <label className="flex flex-col gap-1 text-xs font-medium text-muted">Magnitud mínima
           <input type="number" step="0.1" min="-3" max="12" value={magnitudeInput} onChange={event => setMagnitudeInput(event.target.value)} placeholder="Todas" className="w-32 rounded-lg border border-border-ui bg-page px-3 py-2 text-sm text-main" />
         </label>
@@ -72,28 +96,35 @@ export default function Page() {
       </form>
       <section className="overflow-hidden rounded-2xl border border-border-ui bg-panel">
         <div className="flex items-center justify-between border-b border-border-ui px-5 py-4">
-          <h2 className="font-semibold text-main">Catálogo almacenado en Supabase (histórico USGS)</h2>
+          <h2 className="font-semibold text-main">Catálogo almacenado en Supabase · IGP y USGS</h2>
           <span className="text-xs text-muted">{data?.total ?? '—'} eventos</span>
         </div>
         {error && <p role="alert" className="m-4 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200">{error}. Comprueba FastAPI y Supabase.</p>}
         {loading ? <p className="p-8 text-center text-sm text-muted">Consultando eventos...</p>
           : data?.items.length ? (
-            <div className="overflow-x-auto"><table className="w-full min-w-[780px] text-left text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[1250px] text-left text-sm">
               <thead className="bg-panel-alt text-xs uppercase text-muted"><tr>
-                <th className="px-5 py-3">Fecha/hora (Perú)</th><th className="px-5 py-3">Magnitud</th><th className="px-5 py-3">Profundidad</th><th className="px-5 py-3">Localidad</th><th className="px-5 py-3">Fuente</th><th className="px-5 py-3">Origen</th>
+                <th className="px-3 py-3">Fecha UTC</th><th className="px-3 py-3">Magnitud</th>
+                <th className="px-3 py-3">Prof. km</th><th className="px-3 py-3">Latitud</th><th className="px-3 py-3">Longitud</th>
+                <th className="px-3 py-3">Ubicación</th><th className="px-3 py-3">Fuente</th>
+                <th className="px-3 py-3">ID origen</th><th className="px-3 py-3">URL oficial</th>
               </tr></thead>
-              <tbody className="divide-y divide-border-ui">{data.items.map(event => (
-                <tr key={event.id} className="hover:bg-panel-alt">
-                  <td className="whitespace-nowrap px-5 py-3 text-main">{localTime(event.occurred_at)}</td>
-                  <td className="whitespace-nowrap px-5 py-3 font-semibold text-main">{event.magnitude === null ? '—' : event.magnitude.toFixed(1)} <span className="font-normal text-muted">{event.magnitude_type ?? ''}</span></td>
-                  <td className="whitespace-nowrap px-5 py-3 text-muted">{event.depth_km === null ? '—' : `${event.depth_km.toFixed(1)} km`}</td>
-                  <td className="max-w-80 px-5 py-3 text-main">{event.place ?? 'No especificada'}</td>
-                  <td className="px-5 py-3 text-muted">{event.source_name}</td>
-                  <td className="px-5 py-3"><a href={event.source_url} rel="noopener noreferrer" target="_blank" className="inline-flex items-center gap-1 text-accent hover:underline">Ver <ArrowUpRight size={14} /></a></td>
-                </tr>
-              ))}</tbody>
+              <tbody className="divide-y divide-border-ui">{data.items.map(event => {
+                const url = officialLink(event.source_name, event.external_id, event.source_url);
+                return (<tr key={event.id} className="hover:bg-panel-alt">
+                  <td className="whitespace-nowrap px-3 py-3 text-main" title={`Perú: ${localTime(event.occurred_at)}`}>{utcTime(event.occurred_at)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 font-semibold text-main">{event.magnitude === null ? '—' : event.magnitude.toFixed(1)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-muted">{event.depth_km === null ? '—' : event.depth_km.toFixed(1)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-muted">{event.latitude.toFixed(4)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-muted">{event.longitude.toFixed(4)}</td>
+                  <td className="max-w-80 px-3 py-3 text-main">{event.place ?? 'Sin referencia'}</td>
+                  <td className="px-3 py-3"><span className="inline-flex rounded-md border border-border-ui bg-panel-alt px-2 py-1 text-xs text-main">{event.source_name}</span></td>
+                  <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-muted">{event.external_id}</td>
+                  <td className="whitespace-nowrap px-3 py-3">{url ? <a href={url} rel="noopener noreferrer" target="_blank" className="inline-flex items-center gap-1 text-accent hover:underline">{event.source_name === 'IGP/CENSIS' ? 'Ficha IGP' : 'USGS'} <ArrowUpRight size={14} /></a> : <span className="text-muted">No disponible</span>}</td>
+                </tr>);
+              })}</tbody>
             </table></div>
-          ) : <div className="flex flex-col items-center gap-2 p-12 text-center"><Activity className="text-soft" size={26} /><p className="font-medium text-main">No hay eventos para estos filtros</p><p className="text-sm text-muted">Ejecuta la sincronización USGS desde la terminal 3 o ajusta el rango.</p></div>
+          ) : <div className="flex flex-col items-center gap-2 p-12 text-center"><Activity className="text-soft" size={26} /><p className="font-medium text-main">No hay eventos para estos filtros</p><p className="text-sm text-muted">Prueba otra fuente o período; la caché IGP 2026 puede estar incompleta hasta ejecutar la carga anual.</p></div>
         }
         <div className="flex items-center justify-between border-t border-border-ui px-5 py-4 text-sm text-muted">
           <span>Página {page} de {pages}</span>
@@ -103,7 +134,7 @@ export default function Page() {
           </div>
         </div>
       </section>
-      <p className="text-xs text-soft">Cobertura: rectángulo de consulta de Perú y entorno cercano, no límites políticos exactos. Datos informativos sin carácter oficial ni predictivo.</p>
+      <p className="text-xs text-soft">IGP/CENSIS: reportes oficiales almacenados, cobertura inicial parcial hasta finalizar el backfill 2026. USGS: catálogo complementario que puede incluir países vecinos. Los registros de fuentes distintas no se suman como eventos únicos. Información no predictiva.</p>
     </div>
   );
 }

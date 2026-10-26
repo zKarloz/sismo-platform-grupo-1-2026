@@ -112,12 +112,13 @@ export default function Page() {
     </section>
 
     <div className="overflow-x-auto rounded-xl border border-border-ui bg-panel">
-      <table className="w-full min-w-[730px] text-left text-sm">
+      <table className="w-full min-w-[960px] text-left text-sm">
         <thead className="bg-panel-alt text-muted"><tr>
           <th className="px-4 py-3 font-semibold">Usuario</th>
           <th className="px-4 py-3 font-semibold">Identidad</th>
           <th className="px-4 py-3 font-semibold">Rol</th>
           <th className="px-4 py-3 font-semibold">Estado</th>
+          <th className="px-4 py-3 font-semibold">Acceso / Alta</th>
           {isAdmin && <th className="px-4 py-3 text-right font-semibold">Acciones</th>}
         </tr></thead>
         <tbody>
@@ -128,6 +129,7 @@ export default function Page() {
             <td className="px-4 py-3"><Tag variant={user.role === 'administrador' ? 'info' : 'neutral'}>{displayRole(user.role)}</Tag></td>
             <td className="px-4 py-3"><Tag variant={user.status === 'active' ? 'success' : 'warning'}>
               {user.status === 'active' ? 'Activo' : user.status === 'suspended' ? 'Suspendido' : 'Inactivo'}</Tag></td>
+            <td className="px-4 py-3 text-xs text-muted"><div>Último acceso: {user.last_login_at ? new Date(user.last_login_at).toLocaleDateString('es-PE',{timeZone:'America/Lima'}) : 'Aún no registrado'}</div><div>Alta: {new Date(user.created_at).toLocaleDateString('es-PE',{timeZone:'America/Lima'})}</div></td>
             {isAdmin && <td className="px-4 py-3 text-right">
               <button type="button" disabled={user.id === profile?.id} onClick={() => setModal(user)}
                 title={user.id === profile?.id ? 'No puedes editar tu propia cuenta' : 'Editar rol y estado'}
@@ -136,8 +138,8 @@ export default function Page() {
               </button>
             </td>}
           </tr>)}
-          {loading && <tr><td colSpan={isAdmin ? 5 : 4} className="px-4 py-12 text-center text-muted">Cargando usuarios…</td></tr>}
-          {!loading && !error && items.length === 0 && <tr><td colSpan={isAdmin ? 5 : 4} className="px-4 py-12 text-center text-muted">No se encontraron usuarios.</td></tr>}
+          {loading && <tr><td colSpan={isAdmin ? 6 : 5} className="px-4 py-12 text-center text-muted">Cargando usuarios…</td></tr>}
+          {!loading && !error && items.length === 0 && <tr><td colSpan={isAdmin ? 6 : 5} className="px-4 py-12 text-center text-muted">No se encontraron usuarios.</td></tr>}
         </tbody>
       </table>
     </div>

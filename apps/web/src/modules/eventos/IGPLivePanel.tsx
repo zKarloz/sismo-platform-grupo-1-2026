@@ -25,6 +25,12 @@ type Feed = {
   message: string;
 };
 
+// La URL individual IGP existe para códigos oficiales como 2026-0647.
+function reportLink(code: string) {
+  return /^\d{4}-\d{4,6}$/.test(code)
+    ? `https://ultimosismo.igp.gob.pe/evento/${code}` : IGP_URL;
+}
+
 function peru(iso: string) {
   return new Date(iso).toLocaleString('es-PE', { timeZone: 'America/Lima', dateStyle: 'short', timeStyle: 'medium' });
 }
@@ -100,14 +106,23 @@ export default function IGPLivePanel() {
           </p>}
         {recent && recent.items.length > 0 && (
           <div className="overflow-x-auto rounded-lg border border-border-ui">
-            <table className="w-full min-w-[650px] text-left text-sm">
-              <thead className="bg-panel-alt text-xs uppercase text-muted"><tr><th className="p-3">Hora de Perú</th><th className="p-3">Magnitud</th><th className="p-3">Profundidad</th><th className="p-3">Referencia IGP</th></tr></thead>
+            <table className="w-full min-w-[1150px] text-left text-sm">
+              <thead className="bg-panel-alt text-xs uppercase text-muted"><tr>
+                <th className="p-3">Fecha UTC</th><th className="p-3">Magnitud</th><th className="p-3">Prof. km</th>
+                <th className="p-3">Latitud</th><th className="p-3">Longitud</th><th className="p-3">Ubicación</th>
+                <th className="p-3">Fuente</th><th className="p-3">ID origen</th><th className="p-3">URL oficial</th>
+              </tr></thead>
               <tbody className="divide-y divide-border-ui">{recent.items.map((e) => (
                 <tr key={e.external_id} className="hover:bg-panel-alt">
-                  <td className="whitespace-nowrap p-3 text-main">{peru(e.occurred_at)}</td>
+                  <td className="whitespace-nowrap p-3 text-main" title={`Perú: ${peru(e.occurred_at)}`}>{new Date(e.occurred_at).toISOString().replace('.000Z', 'Z')}</td>
                   <td className="p-3 font-semibold text-main">{e.magnitude?.toFixed(1) ?? '—'}</td>
-                  <td className="p-3 text-muted">{e.depth_km?.toFixed(1) ?? '—'} km</td>
+                  <td className="p-3 text-muted">{e.depth_km?.toFixed(1) ?? '—'}</td>
+                  <td className="p-3 text-muted">{e.latitude.toFixed(4)}</td>
+                  <td className="p-3 text-muted">{e.longitude.toFixed(4)}</td>
                   <td className="p-3 text-main">{e.place || 'Sin referencia'}</td>
+                  <td className="p-3"><span className="rounded-md border border-border-ui bg-panel-alt px-2 py-1 text-xs">IGP/CENSIS</span></td>
+                  <td className="p-3 font-mono text-xs">{e.external_id}</td>
+                  <td className="p-3"><a href={reportLink(e.external_id)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 whitespace-nowrap text-accent hover:underline">Ficha IGP <ArrowUpRight size={14} /></a></td>
                 </tr>
               ))}</tbody>
             </table>

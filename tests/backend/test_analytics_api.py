@@ -82,8 +82,5 @@ def test_validations_and_csv(client):
     assert client.get("/api/v1/dashboard/summary?min_magnitude=6&max_magnitude=3").status_code == 422
     assert client.get("/api/v1/events/geojson?limit=3000").status_code == 422
     response = client.get("/api/v1/analytics/export.csv")
-    assert response.status_code == 200
-    assert "fecha_utc" in response.text
-    assert "'=HYPERLINK" in response.text
-    assert "'-75" not in response.text  # Los negativos numéricos no son fórmulas.
-    assert response.headers["x-export-total"] == "4"
+    # Fase 8: los volcados CSV ya requieren identidad y un rol exportador.
+    assert response.status_code == 401

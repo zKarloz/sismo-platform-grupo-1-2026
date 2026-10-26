@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timezone
 from math import isfinite
+import re
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -18,6 +19,18 @@ IGP_REPORTS = f"{IGP_BASE}/SismosReportados/MapServer/0/query"
 IGP_LATEST = f"{IGP_BASE}/UltimoSismo/MapServer/0/query"
 IGP_REPORTS_PAGE = "https://ultimosismo.igp.gob.pe/productos/reportes-sismicos"
 LIMA = ZoneInfo("America/Lima")
+REPORT_CODE = re.compile(r"^\d{4}-\d{4,6}$")
+
+
+def official_report_url(report_code: str | None) -> str:
+    """Ficha individual oficial cuando hay código IGP; portal si no es fiable.
+
+    El portal CENSIS publica fichas como /evento/2026-0647. No inventamos
+    identificadores a partir de OBJECTID ni de URLs recibidas sin validar.
+    """
+    if isinstance(report_code, str) and REPORT_CODE.fullmatch(report_code.strip()):
+        return f"https://ultimosismo.igp.gob.pe/evento/{report_code.strip()}"
+    return IGP_REPORTS_PAGE
 
 
 class IGPFeedError(ValueError):
@@ -145,7 +158,7 @@ def normalize(feature: dict[str, Any], feed: str) -> dict[str, Any]:
         "depth_km": depth,
         "place": str(place).strip() if place else None,
         "source_name": "IGP/CENSIS",
-        "source_url": IGP_REPORTS_PAGE,
+        "source_url": official_report_url(str(raw_id) if feed == "recent" else None),
     }
 
 

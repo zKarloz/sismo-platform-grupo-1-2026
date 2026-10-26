@@ -92,7 +92,7 @@ def list_users(page: int = Query(1, ge=1, le=100000),
             total = conn.execute(select(func.count()).select_from(users).where(*where)).scalar_one()
             rows = conn.execute(select(
                 users.c.id, users.c.full_name, users.c.email,
-                users.c.role, users.c.status, users.c.auth_user_id, users.c.created_at,
+                users.c.role, users.c.status, users.c.auth_user_id, users.c.created_at, users.c.last_login_at,
             ).where(*where).order_by(users.c.created_at.desc(), users.c.id.desc())
               .limit(page_size).offset((page-1)*page_size)).mappings().all()
         return {'items': [dict(r) for r in rows], 'total': total,

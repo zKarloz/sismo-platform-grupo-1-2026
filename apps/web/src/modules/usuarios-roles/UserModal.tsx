@@ -14,6 +14,7 @@ export type AppUser = {
   role: Role;
   status: string;
   created_at: string;
+  last_login_at: string | null;
 };
 
 export const roles: Role[] = ['administrador', 'analista', 'operador_alertas', 'auditor', 'solo_lectura'];

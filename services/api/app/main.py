@@ -68,3 +68,7 @@ app.include_router(personal_notifications_router, prefix="/api/v1")
 from app.routes.reports import router as reports_router, admin_router as system_admin_router
 app.include_router(reports_router, prefix='/api/v1')
 app.include_router(system_admin_router, prefix='/api/v1')
+
+# Histórico IGP 1960–2025: consulta bajo demanda, fuera del motor de alertas.
+from app.routes.igp_history import router as igp_history_router
+app.include_router(igp_history_router, prefix="/api/v1")

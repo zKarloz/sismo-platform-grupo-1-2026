@@ -16,6 +16,7 @@ import ReportesPage from '../modules/reportes/Page';
 import UsuariosPage from '../modules/usuarios-roles/Page';
 import AuditoriaPage from '../modules/auditoria/Page';
 import MisNotificacionesPage from '../modules/mis-notificaciones/Page';
+import HistoricoIGPPage from '../modules/historico-igp/Page';
 
 export const router = createBrowserRouter([{ path: '/login', element: <LoginPage /> },
   { path: '/establecer-clave', element: <SetPasswordPage /> }, {
@@ -23,6 +24,7 @@ export const router = createBrowserRouter([{ path: '/login', element: <LoginPage
   children: [
     { index: true, element: <DashboardPage /> },
     { path: 'eventos', element: <EventosPage /> },
+    { path: 'historico-igp', element: <HistoricoIGPPage /> },
     { path: 'mapa-sismico', element: <MapaPage /> },
     { path: 'analisis', element: <AnalisisPage /> },
     { path: 'calidad-datos', element: <CalidadPage /> },

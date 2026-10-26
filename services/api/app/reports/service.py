@@ -155,18 +155,18 @@ def report_title(kind: str, cutoff: datetime) -> str:
     return f'Sistema de Monitoreo Sísmico V2 · {KINDS[kind]} · {cutoff.strftime("%Y-%m-%d %H:%M UTC")}'
 
 
-def render_csv(kind: str, rows: list[dict], cutoff: datetime) -> bytes:
+def render_csv(kind: str, rows: list[dict], cutoff: datetime, source_note: str | None = None) -> bytes:
     buff = StringIO(newline='')
     writer = csv.writer(buff)
     writer.writerow(['# ' + report_title(kind, cutoff)])
-    writer.writerow(['# Fuente: IGP/CENSIS y/o USGS según cada registro; fecha de corte UTC'])
+    writer.writerow(['# '+(source_note or 'Fuente: IGP/CENSIS y/o USGS según cada registro; fecha de corte UTC')])
     writer.writerow([label for _,label in COLUMNS[kind]])
     for row in rows:
         writer.writerow([csv_cell(row.get(key)) for key,_ in COLUMNS[kind]])
     return ('\ufeff' + buff.getvalue()).encode('utf-8')
 
 
-def render_xlsx(kind: str, rows: list[dict], cutoff: datetime) -> bytes:
+def render_xlsx(kind: str, rows: list[dict], cutoff: datetime, source_note: str | None = None) -> bytes:
     """XLSX OOXML sin fórmulas, macros, vínculos externos ni dependencias pesadas."""
     def cell(addr: str, value: str, style: int = 0) -> str:
         # inlineStr: Excel interpreta los valores como texto, incluso si empiezan por '='.
@@ -180,7 +180,7 @@ def render_xlsx(kind: str, rows: list[dict], cutoff: datetime) -> bytes:
         return result
     count = len(COLUMNS[kind])
     data = ['<row r="1">' + cell('A1',report_title(kind, cutoff),1) + '</row>',
-            '<row r="2">' + cell('A2','Fuente: IGP/CENSIS o USGS | Solo sismos registrados | Sin predicción',0) + '</row>',
+            '<row r="2">' + cell('A2',source_note or 'Fuente: IGP/CENSIS o USGS | Solo sismos registrados | Sin predicción',0) + '</row>',
             '<row r="3">' + cell('A3',f'Filas: {len(rows)} · Fecha de corte: {cutoff.isoformat()}') + '</row>']
     data.append('<row r="5">' + ''.join(cell(f'{column(i)}5',label,2)
                    for i,(_,label) in enumerate(COLUMNS[kind],1)) + '</row>')
@@ -237,7 +237,7 @@ def render_xlsx(kind: str, rows: list[dict], cutoff: datetime) -> bytes:
     return memory.getvalue()
 
 
-def render_pdf(kind: str, rows: list[dict], cutoff: datetime) -> bytes:
+def render_pdf(kind: str, rows: list[dict], cutoff: datetime, source_note: str | None = None) -> bytes:
     """PDF landscape paginado, sin ruta pública ni contenido editable del cliente."""
     output=BytesIO()
     doc=SimpleDocTemplate(output,pagesize=landscape(A4),leftMargin=13*mm,
@@ -248,6 +248,7 @@ def render_pdf(kind: str, rows: list[dict], cutoff: datetime) -> bytes:
     content=[Paragraph(xml_escape(KINDS[kind]),title),
              Paragraph(f'Sistema de Monitoreo Sísmico V2 · Corte: {cutoff.isoformat()} · Registros: {len(rows)}',styles['Normal']),
              Paragraph('Datos de sismos observados y reportados. No constituye predicción ni alerta temprana.',styles['Normal']),
+             Paragraph(xml_escape(source_note),styles['Normal']) if source_note else Spacer(1,1*mm),
              Spacer(1,6*mm)]
     if kind == 'events' and rows:
         # Gráfico sencillo, descrito con fuente y fecha de corte; no inventa datos.
@@ -280,20 +281,20 @@ def render_pdf(kind: str, rows: list[dict], cutoff: datetime) -> bytes:
     def page_number(canvas, document):
         canvas.setFont('Helvetica',7)
         canvas.setFillColor(colors.HexColor('#537081'))
-        canvas.drawString(13*mm,9*mm,f'Corte UTC: {cutoff.isoformat()} | Fuente: datos registrados IGP/USGS')
+        canvas.drawString(13*mm,9*mm,f'Corte UTC: {cutoff.isoformat()} | Fuente: '+('Catálogo IGP' if source_note else 'datos registrados IGP/USGS'))
         canvas.drawRightString(landscape(A4)[0]-13*mm,9*mm,f'Página {document.page}')
     doc.build(content,onFirstPage=page_number,onLaterPages=page_number)
     return output.getvalue()
 
 
-def render_file(kind: str, format_: str, rows: list[dict], cutoff: datetime) -> tuple[bytes,str]:
+def render_file(kind: str, format_: str, rows: list[dict], cutoff: datetime, source_note: str | None = None) -> tuple[bytes,str]:
     renders = {'csv':(render_csv,'text/csv; charset=utf-8'),
                'xlsx':(render_xlsx,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
                'pdf':(render_pdf,'application/pdf')}
     if format_ not in renders or kind not in KINDS:
         raise ValueError('Tipo/formato de reporte desconocido')
     factory,media = renders[format_]
-    return factory(kind,rows,cutoff),media
+    return factory(kind,rows,cutoff,source_note),media
 
 
 def checksum(content: bytes) -> str:

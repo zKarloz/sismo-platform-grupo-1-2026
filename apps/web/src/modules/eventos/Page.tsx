@@ -1,9 +1,10 @@
 /** Catálogo real de sismos persistidos con filtros y paginación de servidor. */
 import { useEffect, useState, type FormEvent } from 'react';
-import { Activity, ArrowUpRight, ChevronLeft, ChevronRight, Filter, RefreshCw } from 'lucide-react';
+import { Archive, Activity, ArrowUpRight, ChevronLeft, ChevronRight, Filter, RefreshCw } from 'lucide-react';
 import { getEvents, type EventFilters } from '../../services/seismic';
 import type { EventPage } from '../../types/seismic';
 import IGPLivePanel from './IGPLivePanel';
+import { Link } from 'react-router-dom';
 
 // Solo enlazar fichas por código IGP validado; para USGS usar el enlace almacenado.
 function officialLink(source: string, externalId: string, storedUrl: string): string | null {
@@ -74,6 +75,7 @@ export default function Page() {
         </div>
         <button type="button" onClick={() => setRevision(v => v + 1)} className="inline-flex items-center gap-2 rounded-lg border border-border-ui bg-panel px-3 py-2 text-sm text-main hover:bg-panel-alt"><RefreshCw size={16} /> Actualizar</button>
       </div>
+      <Link to="/historico-igp" className="inline-flex items-center gap-2 rounded-lg border border-border-ui bg-panel px-4 py-2 text-sm text-accent hover:bg-panel-alt"><Archive size={16}/> Consultar histórico oficial IGP 1960–2025</Link>
       <IGPLivePanel />
       <form onSubmit={applyFilters} className="flex flex-wrap items-end gap-3 rounded-2xl border border-border-ui bg-panel p-4">
         <label className="flex flex-col gap-1 text-xs font-medium text-muted">Fuente

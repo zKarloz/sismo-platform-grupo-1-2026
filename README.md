@@ -1,4 +1,5 @@
 <!-- Proyecto: Sistema de Monitoreo Sísmico V2. Base técnica de la Fase 1. -->
+
 # Sistema de Monitoreo Sísmico V2
 
 Monorepositorio para consultar y analizar **eventos sísmicos ya ocurridos** en Perú. El módulo de ML será **exploratorio/retrospectivo** y los avisos serán **internos, basados en eventos observados**, nunca predicciones ni alertas oficiales.

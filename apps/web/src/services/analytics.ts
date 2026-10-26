@@ -1,7 +1,7 @@
 /** Todos los componentes consultan FastAPI; nunca se conecta React a Supabase. */
 import { authClient } from '../auth/client';
 import type {
-  AnalyticsFilters, GeoDataset, MagnitudeDistribution,
+  AnalyticsFilters, DashboardOperations, GeoDataset, MagnitudeDistribution,
   ScatterDataset, Summary, TimeSeries,
 } from '../types/analytics';
 
@@ -22,6 +22,7 @@ async function read<T>(endpoint: string, filters: AnalyticsFilters, extra: Recor
   return (await response.json()) as T;
 }
 
+export const getDashboardOperations = (signal?: AbortSignal) => read<DashboardOperations>('dashboard/operations', { source: 'IGP/CENSIS' }, {}, signal);
 export const getSummary = (filters: AnalyticsFilters, signal?: AbortSignal) => read<Summary>('dashboard/summary', filters, {}, signal);
 export const getTimeSeries = (filters: AnalyticsFilters, interval: 'day' | 'month', signal?: AbortSignal) => read<TimeSeries>('analytics/timeseries', filters, { interval }, signal);
 export const getMagnitudes = (filters: AnalyticsFilters, signal?: AbortSignal) => read<MagnitudeDistribution>('analytics/magnitudes', filters, {}, signal);

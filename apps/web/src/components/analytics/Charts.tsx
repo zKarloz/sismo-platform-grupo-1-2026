@@ -8,7 +8,9 @@ import type { MagnitudeDistribution, ScatterDataset, TimeSeries } from '../../ty
 const accent = 'var(--ui-accent)';
 const muted = 'var(--ui-muted)';
 const grid = 'var(--ui-border)';
-const tooltipStyle = { backgroundColor: 'var(--ui-panel)', border: '1px solid var(--ui-border)', color: 'var(--ui-main)', borderRadius: 10 };
+const tooltipStyle = { backgroundColor: 'var(--ui-panel)', border: '1px solid var(--ui-border)', color: 'var(--ui-main)', borderRadius: 10, boxShadow: '0 8px 28px rgb(0 0 0 / 0.22)' };
+const tooltipItemStyle = { color: 'var(--ui-main)' };
+const tooltipLabelStyle = { color: 'var(--ui-main)', fontWeight: 600 };
 
 function Empty({ text }: { text: string }) {
   return <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-border-ui text-center text-sm text-muted">{text}</div>;
@@ -22,7 +24,7 @@ export function SeriesChart({ data }: { data: TimeSeries | null }) {
         <CartesianGrid stroke={grid} strokeDasharray="3 3" vertical={false}/>
         <XAxis dataKey="period" stroke={muted} tick={{ fontSize: 11 }} minTickGap={25}/>
         <YAxis allowDecimals={false} stroke={muted} tick={{ fontSize: 11 }} />
-        <Tooltip contentStyle={tooltipStyle} formatter={(value) => [value, 'Eventos']} />
+        <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} cursor={{ stroke: 'var(--ui-border)' }} formatter={(value) => [value, 'Eventos']} />
         <Line type="monotone" dataKey="count" name="Eventos" stroke={accent} strokeWidth={2.5} dot={data.items.length <= 25} activeDot={{ r: 5 }} />
       </LineChart>
     </ResponsiveContainer>
@@ -37,7 +39,7 @@ export function MagnitudesChart({ data }: { data: MagnitudeDistribution | null }
         <CartesianGrid stroke={grid} strokeDasharray="3 3" vertical={false}/>
         <XAxis dataKey="range" stroke={muted} tick={{ fontSize: 11 }}/>
         <YAxis stroke={muted} tick={{ fontSize: 11 }} allowDecimals={false}/>
-        <Tooltip contentStyle={tooltipStyle} formatter={(value) => [value, 'Eventos']} />
+        <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle} cursor={{ fill: 'var(--ui-panel-alt)', fillOpacity: 0.8 }} formatter={(value) => [value, 'Eventos']} />
         <Bar dataKey="count" fill={accent} radius={[4, 4, 0, 0]} maxBarSize={55}/>
       </BarChart>
     </ResponsiveContainer>
@@ -53,7 +55,7 @@ export function DepthScatterChart({ data }: { data: ScatterDataset | null }) {
         <XAxis type="number" dataKey="depth_km" name="Profundidad" unit=" km" stroke={muted} tick={{ fontSize: 11 }} />
         <YAxis type="number" dataKey="magnitude" name="Magnitud" stroke={muted} tick={{ fontSize: 11 }} width={35}/>
         <ZAxis range={[50, 50]}/>
-        <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={tooltipStyle}/>
+        <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} labelStyle={tooltipLabelStyle}/>
         <Scatter data={data.items} fill={accent}/>
       </ScatterChart>
     </ResponsiveContainer>

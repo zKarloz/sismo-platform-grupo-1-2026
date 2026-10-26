@@ -7,6 +7,15 @@ export interface AnalyticsFilters {
   min_depth?: number;
   max_depth?: number;
   source?: string;
+  /** Rectángulo geográfico WGS84, completo o ausente. */
+  min_lat?: number;
+  max_lat?: number;
+  min_lon?: number;
+  max_lon?: number;
+  /** Círculo de búsqueda geográfica: centro WGS84 y radio en km. No es impacto. */
+  center_lat?: number;
+  center_lon?: number;
+  radius_km?: number;
 }
 
 export interface Summary {
@@ -15,6 +24,7 @@ export interface Summary {
   with_depth: number;
   max_magnitude: number | null;
   avg_depth_km: number | null;
+  median_depth_km: number | null;
   latest_event_at: string | null;
 }
 export interface SeriesPoint { period: string; count: number }
@@ -34,3 +44,20 @@ export interface GeoFeature {
   };
 }
 export interface GeoDataset { type: 'FeatureCollection'; features: GeoFeature[]; total: number; returned: number; truncated: boolean; sample: 'most_recent' }
+
+/** Indicadores operativos del conector IGP; nunca equivalen a alertas tempranas. */
+export interface DashboardOperations {
+  latest_event_ingestion_lag_minutes: number | null;
+  open_alerts: number;
+  enabled_rules: number;
+  connector_status: string | null;
+  last_success_at: string | null;
+  last_run: {
+    started_at: string | null;
+    finished_at: string | null;
+    status: string;
+    records_seen: number | null;
+    records_inserted: number | null;
+    records_updated: number | null;
+  } | null;
+}

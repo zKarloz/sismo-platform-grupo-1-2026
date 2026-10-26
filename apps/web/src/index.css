@@ -85,10 +85,7 @@ body { margin: 0; min-width: 320px; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button:focus-visible, a:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 3px; }
 
-/* Marcadores Leaflet: color semántico también en modo oscuro neutro. */
-.leaflet-overlay-pane .sismo-point {
-  stroke: var(--ui-accent);
-  fill: var(--ui-accent);
-}
+/* Los epicentros del mapa determinan stroke/fill desde la magnitud IGP.
+ * No imponer aquí el color del tema: desactivaría el semáforo del mapa. */
 /* No ocultar controles ni atribución obligatoria de OpenStreetMap. */
 .leaflet-control-attribution { font-size: 11px; }

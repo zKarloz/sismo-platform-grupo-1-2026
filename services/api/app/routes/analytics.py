@@ -12,7 +12,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.session import get_read_engine
-from app.db.tables import events, sources
+from app.db.tables import alert_rules, alerts, events, runs, sources
 from app.routes.filters import SeismicFilters, get_filters
 
 analytics_router = APIRouter(prefix="/analytics", tags=["Análisis descriptivo"])
@@ -42,6 +42,18 @@ def summary(
                     func.max(events.c.occurred_at).label("latest_event_at"),
                 ).select_from(JOIN).where(*filters.conditions())
             ).mappings().one()
+            # Mediana real, sin transferir decenas de miles de profundidades a Python.
+            # Una ventana SQL permite la misma implementación en PostgreSQL y SQLite.
+            ranked = select(
+                events.c.depth_km.label('depth'),
+                func.row_number().over(order_by=events.c.depth_km).label('pos'),
+                func.count().over().label('n'),
+            ).select_from(JOIN).where(*filters.conditions(), events.c.depth_km.is_not(None)).subquery()
+            median = conn.execute(
+                select(func.avg(ranked.c.depth)).where(
+                    func.abs(ranked.c.pos - (ranked.c.n + 1) / 2.0) < 1
+                )
+            ).scalar_one()
     except SQLAlchemyError:
         raise _safe_query_error() from None
     return {
@@ -51,6 +63,66 @@ def summary(
         "max_magnitude": stats["max_magnitude"],
         "avg_depth_km": round(float(stats["avg_depth_km"]), 1) if stats["avg_depth_km"] is not None else None,
         "latest_event_at": stats["latest_event_at"],
+        "median_depth_km": round(float(median), 1) if median is not None else None,
+    }
+
+
+@dashboard_router.get('/operations')
+def dashboard_operations(engine: Engine = Depends(get_read_engine)) -> dict:
+    """Operación IGP registrada: pendientes reales, estado y duración de ingesta.
+
+    No expone reglas, destinatarios ni avisos individuales; los estados
+    pending/approved son tareas abiertas, mientras que sent es historial.
+    """
+    igp_name = func.lower(sources.c.name) == 'igp/censis'
+    try:
+        with engine.connect() as conn:
+            alert_count = conn.execute(
+                select(func.count()).select_from(
+                    alerts.join(events, alerts.c.event_id == events.c.id)
+                    .join(sources, events.c.source_id == sources.c.id)
+                ).where(igp_name, alerts.c.status.in_(['pending', 'approved']))
+            ).scalar_one()
+            active_rules = conn.execute(
+                select(func.count()).select_from(
+                    alert_rules.join(sources, alert_rules.c.source_id == sources.c.id)
+                ).where(igp_name, alert_rules.c.enabled.is_(True))
+            ).scalar_one()
+            source = conn.execute(
+                select(sources.c.id, sources.c.status, sources.c.last_success_at)
+                .where(igp_name).limit(1)
+            ).mappings().first()
+            latest_arrival = conn.execute(
+                select(events.c.occurred_at, events.c.received_at)
+                .select_from(JOIN)
+                .where(igp_name, events.c.received_at.is_not(None))
+                .order_by(events.c.occurred_at.desc()).limit(1)
+            ).first()
+            last_run = None
+            if source:
+                last_run = conn.execute(
+                    select(runs.c.started_at, runs.c.finished_at, runs.c.status,
+                           runs.c.records_seen, runs.c.records_inserted,
+                           runs.c.records_updated)
+                    .where(runs.c.source_id == source['id'])
+                    .order_by(runs.c.started_at.desc()).limit(1)
+                ).mappings().first()
+    except SQLAlchemyError:
+        raise _safe_query_error() from None
+    # Tiempo evento -> recepción en nuestra BD. Puede incluir conciliaciones
+    # históricas; no es un SLA ni la latencia propia del servicio ArcGIS.
+    lag = None
+    if latest_arrival:
+        seconds = (latest_arrival.received_at - latest_arrival.occurred_at).total_seconds()
+        if seconds >= 0:
+            lag = round(seconds / 60, 1)
+    return {
+        'latest_event_ingestion_lag_minutes': lag,
+        'open_alerts': alert_count,
+        'enabled_rules': active_rules,
+        'connector_status': source['status'] if source else None,
+        'last_success_at': source['last_success_at'] if source else None,
+        'last_run': dict(last_run) if last_run else None,
     }
 
 

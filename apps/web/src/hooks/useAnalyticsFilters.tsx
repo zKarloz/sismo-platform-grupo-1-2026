@@ -12,7 +12,7 @@ interface AnalyticsContextValue {
 const AnalyticsContext = createContext<AnalyticsContextValue | undefined>(undefined);
 
 export function AnalyticsProvider({ children }: { children: ReactNode }) {
-  const [filters, setFilters] = useState<AnalyticsFilters>({ source: 'USGS' });
+  const [filters, setFilters] = useState<AnalyticsFilters>({ source: 'IGP/CENSIS' });
   const [revision, setRevision] = useState(0);
   const value = useMemo(() => ({ filters, setFilters, revision, refresh: () => setRevision(n => n + 1) }), [filters, revision]);
   return <AnalyticsContext.Provider value={value}>{children}</AnalyticsContext.Provider>;

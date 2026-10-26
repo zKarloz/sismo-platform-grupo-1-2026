@@ -1,0 +1,107 @@
+/* Mapa sísmico IGP/CENSIS: estilos exclusivos, con fuente heredada.
+ * Las fichas de grupos son Popup nativos (pane superior) y nunca Tooltip
+ * anidados en las etiquetas permanentes que muestran el número del grupo.
+ */
+.sismo-leaflet-map,
+.sismo-leaflet-map .leaflet-popup,
+.sismo-leaflet-map .leaflet-tooltip,
+.sismo-leaflet-map .leaflet-popup-content,
+.sismo-leaflet-map button { font-family: inherit; }
+
+/* El número es solo una etiqueta centrada, sin eventos ni ventana flotante. */
+.sismo-leaflet-map .leaflet-tooltip.sismo-cluster-label {
+  background: #155e75;
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  box-shadow: none;
+  padding: 1px 3px;
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.sismo-leaflet-map .leaflet-tooltip.sismo-cluster-label::before { display: none; }
+
+/* Un Popup está en leaflet-popup-pane (encima de tooltip-pane y overlay-pane).
+ * No depender del z-index de un elemento anidado en una etiqueta de clúster. */
+.sismo-leaflet-map .leaflet-popup-pane { z-index: 750; }
+.sismo-leaflet-map .leaflet-tooltip-pane { z-index: 650; }
+.sismo-leaflet-map .leaflet-popup.sismo-cluster-popup { font-family: inherit; }
+.sismo-leaflet-map .leaflet-popup.sismo-cluster-popup .leaflet-popup-content-wrapper {
+  background: var(--ui-panel);
+  color: var(--ui-main);
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  box-shadow: 0 14px 35px rgb(0 0 0 / 28%);
+  animation: sismo-cluster-open 180ms ease-out both;
+}
+.sismo-leaflet-map .leaflet-popup.sismo-cluster-popup .leaflet-popup-tip {
+  background: var(--ui-panel);
+}
+/* Las fichas de sismo individual y agrupación comparten exactamente el ancho.
+ * La medida se adapta a teléfonos y no depende de la longitud del contenido.
+ * Una clase común evita que futuras mejoras desalineen los dos popups. */
+.sismo-leaflet-map .leaflet-popup.sismo-event-popup .leaflet-popup-content {
+  width: min(300px, calc(100vw - 90px)) !important;
+  max-width: min(300px, calc(100vw - 90px)) !important;
+  margin: 12px;
+  box-sizing: border-box;
+}
+@keyframes sismo-cluster-open {
+  from { opacity: 0.4; transform: translateY(5px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sismo-leaflet-map .leaflet-popup.sismo-cluster-popup .leaflet-popup-content-wrapper { animation: none; }
+}
+
+/* Lista de eventos desplazable; scrollbar discreto, independiente de Leaflet.
+ * overscroll-behavior y disableScrollPropagation impiden zoom/scroll encadenado.
+ */
+.sismo-leaflet-map .sismo-cluster-detail { font-size: 0.875rem; line-height: 1.45; }
+.sismo-leaflet-map .sismo-cluster-title { display: block; font-size: 0.9rem; }
+.sismo-leaflet-map .sismo-cluster-description { margin: 4px 0 10px; color: var(--ui-muted); font-size: 0.75rem; }
+.sismo-leaflet-map .sismo-cluster-help { margin: 8px 0 0; color: var(--ui-muted); font-size: 0.72rem; }
+.sismo-leaflet-map .sismo-cluster-events {
+  display: grid;
+  gap: 3px;
+  max-height: min(240px, 38vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-muted) transparent;
+  padding: 0 5px 0 0;
+  margin: 0;
+  list-style: none;
+}
+.sismo-leaflet-map .sismo-cluster-events::-webkit-scrollbar { width: 5px; }
+.sismo-leaflet-map .sismo-cluster-events::-webkit-scrollbar-thumb { background: var(--ui-muted); border-radius: 5px; }
+.sismo-leaflet-map .sismo-cluster-event {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 5px;
+  background: transparent;
+  color: var(--ui-main);
+  text-align: left;
+  font-size: 0.75rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+.sismo-leaflet-map .sismo-cluster-event:hover,
+.sismo-leaflet-map .sismo-cluster-event:focus-visible { background: var(--ui-panel-alt); }
+.sismo-leaflet-map .sismo-cluster-event:focus-visible { outline: 2px solid var(--ui-accent); }
+.sismo-leaflet-map .sismo-cluster-event-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+/* Mantener el popup de epicentro y selector de capas con tokens del sistema. */
+.sismo-leaflet-map .leaflet-popup-content-wrapper,
+.sismo-leaflet-map .leaflet-popup-tip,
+.sismo-leaflet-map .leaflet-control-layers { background: var(--ui-panel); color: var(--ui-main); }
+.sismo-leaflet-map .leaflet-control-layers { border: 1px solid var(--ui-border); }
+.sismo-leaflet-map .leaflet-popup-content a { color: var(--ui-accent); }
+.sismo-leaflet-map .leaflet-interactive.sismo-cluster-circle { cursor: pointer; }
+.sismo-leaflet-map .leaflet-interactive.sismo-point { cursor: pointer; }
+/* Los colores de los sismos se establecen por marcador y no dependen del tema. */

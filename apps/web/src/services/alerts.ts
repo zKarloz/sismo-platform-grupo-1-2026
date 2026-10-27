@@ -31,7 +31,10 @@ export type AlertItem = {
   source_name: string;
   rule_name: string;
   channel: string;
-  delivery: {status: string; attempts: number; delivered_at: string | null; acknowledged_at: string | null} | null;
+  event_id: string;
+  approved_by_name: string | null;
+  delivery: {status: string; attempts: number; last_attempt_at: string | null;
+    delivered_at: string | null; acknowledged_at: string | null; error_code: string | null} | null;
 };
 
 async function read<T>(url: string, signal?: AbortSignal): Promise<T> {
@@ -41,9 +44,9 @@ async function read<T>(url: string, signal?: AbortSignal): Promise<T> {
 export const getAlertRules = (signal?: AbortSignal) =>
   read<{items: AlertRule[]}>('/api/v1/alert-rules', signal);
 
-export const getAlertHistory = (page: number, status: string, signal?: AbortSignal) =>
+export const getAlertHistory = (page: number, pageSize: number, status: string, signal?: AbortSignal) =>
   read<{items: AlertItem[]; total: number; page: number; page_size: number; disclaimer: string}>(
-    `/api/v1/alerts?page=${page}&page_size=20${status ? `&status=${encodeURIComponent(status)}` : ''}`, signal,
+    `/api/v1/alerts?page=${page}&page_size=${pageSize}${status ? `&status=${encodeURIComponent(status)}` : ''}`, signal,
   );
 
 // Control de reglas y aprobación; actor verificado por FastAPI.
@@ -83,3 +86,21 @@ export const sendGmailTechnicalTest = (gmail: string, appPassword: string) =>
     method:'POST', body:JSON.stringify({gmail, app_password: appPassword}),
     cache:'no-store',
   });
+
+/** Eventos IGP recientes y prueba de regla: no generan avisos ni envían correo. */
+export type SimulationEvent = {
+  id: string;
+  occurred_at: string;
+  magnitude: number | null;
+  place: string | null;
+};
+export type SimulationResult = {
+  match: boolean;
+  reason: string;
+  simulation: boolean;
+  disclaimer: string;
+};
+export const getSimulationEvents = (signal?: AbortSignal) =>
+  read<{items: SimulationEvent[]}>('/api/v1/admin/alert-rules/simulation/events', signal);
+export const simulateAlertRule = (ruleId: string, eventId: string) =>
+  read<SimulationResult>(`/api/v1/admin/alert-rules/${encodeURIComponent(ruleId)}/simulate/${encodeURIComponent(eventId)}`);

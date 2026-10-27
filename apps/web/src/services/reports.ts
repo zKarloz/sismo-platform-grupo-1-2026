@@ -15,7 +15,9 @@ export type ReportHistory = {items:ReportRecord[];total:number;page:number;pages
 export type SystemSettings = {values:Record<string,number>;editable:boolean;note:string};
 
 export const getReportOptions = () => apiAuthed<ReportOptions>('/api/v1/reports/options');
-export const getReportHistory = (page:number) => apiAuthed<ReportHistory>(`/api/v1/reports/history?page=${page}&page_size=10`);
+/** Consulta una página real en PostgreSQL; mantiene 10 por defecto para consumidores anteriores. */
+export const getReportHistory = (page:number, pageSize:5|10|20 = 10) =>
+  apiAuthed<ReportHistory>(`/api/v1/reports/history?page=${page}&page_size=${pageSize}`);
 export const getSystemSettings = () => apiAuthed<SystemSettings>('/api/v1/admin/system/settings');
 export const saveSystemSetting = (key:string,value_int:number) => apiAuthed<{key:string;value_int:number}>(
   '/api/v1/admin/system/settings',{method:'PATCH',body:JSON.stringify({key,value_int})});
@@ -40,5 +42,11 @@ async function binaryDownload(path:string, options:RequestInit, fallback:string)
 }
 export const downloadReport = (payload:ReportPayload) => binaryDownload('/api/v1/reports/generate',
   {method:'POST',body:JSON.stringify(payload)},`reporte.${payload.format}`);
-export const downloadAudit = () => binaryDownload('/api/v1/admin/system/audit/export.csv',
-  {method:'GET'},'auditoria.csv');
+/** El CSV exporta exactamente los filtros visibles del historial de Auditoría. */
+export type AuditExportFilters = {q?:string;category?:string;result?:string;start_date?:string;end_date?:string};
+export const downloadAudit = (filters:AuditExportFilters = {}) => {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key,value])=>{if(value && value !== 'todos') params.set(key,value);});
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  return binaryDownload(`/api/v1/admin/system/audit/export.csv${suffix}`,{method:'GET'},'auditoria.csv');
+};

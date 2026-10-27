@@ -1,6 +1,7 @@
 /** Reportes oficiales publicados por el IGP; lectura bajo demanda y cada 5 minutos.
  * La hora de consulta es distinta de la hora del sismo y de la publicación.
  */
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { useCallback, useEffect, useState } from 'react';
 import { Activity, ArrowUpRight, Clock3, RefreshCw, Wifi } from 'lucide-react';
 
@@ -82,7 +83,7 @@ export default function IGPLivePanel() {
       <div className="space-y-4 p-5">
         <p className="text-xs text-muted">Consulta directa al servicio ArcGIS REST oficial mediante FastAPI. La página comprueba novedades cada 5 minutos, pero la publicación depende del IGP. No es un sistema de alerta temprana.</p>
         {error && <p role="alert" className="rounded-lg border border-border-ui bg-panel-alt p-3 text-sm text-main">{error}</p>}
-        {loading && <p role="status" className="text-sm text-muted">Consultando capas del IGP…</p>}
+        {loading && <LoadingSpinner label="Consultando capas del IGP…" />}
         {latestEvent && (
           <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-panel-alt p-4">
             <div>

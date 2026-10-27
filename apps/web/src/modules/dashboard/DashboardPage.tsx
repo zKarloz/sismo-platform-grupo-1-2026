@@ -2,6 +2,7 @@
  * Evita sumar USGS al catálogo IGP y presenta solamente un gráfico a la vez.
  * La capa de reportes recientes no se suma al inventario almacenado.
  */
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Activity, ArrowUpRight, Bell, Database, RefreshCw, Ruler } from 'lucide-react';
@@ -121,7 +122,7 @@ export default function DashboardPage() {
           <ChartSwitcher choices={charts} value={chart} onChange={setChart} />
         </div>
         <div className="mt-5" aria-live="polite">
-          {loading ? <p className="flex h-72 items-center justify-center text-sm text-muted">Actualizando gráfico…</p>
+          {loading ? <LoadingSpinner label="Actualizando gráfico…" className="h-72" />
             : chart === 'events' ? <SeriesChart data={series} /> : <MagnitudesChart data={magnitudes} />}
         </div>
         <p className="mt-3 text-xs text-soft">
@@ -143,7 +144,7 @@ export default function DashboardPage() {
         <p className="mt-1 text-xs text-muted">Muestra en vivo; no se suma a los indicadores del catálogo.
           {lastEvent && <> Último sismo publicado: M {lastEvent.magnitude?.toFixed(1) ?? '—'} ({peruDate(lastEvent.occurred_at, true)}).</>}
         </p>
-        {igpRecent.loading && !igpRecent.data && <p className="mt-5 text-sm text-muted">Consultando reportes recientes…</p>}
+        {igpRecent.loading && !igpRecent.data && <LoadingSpinner variant="inline" label="Consultando reportes recientes…" className="mt-5 text-muted" />}
         {igpRecent.data?.items.length ? <ul className="mt-3 divide-y divide-border-ui">
           {igpRecent.data.items.slice(0, 3).map(item => <li key={item.external_id}>
             {/* Navegación por ID oficial: Mapa localiza el epicentro y abre su popup. */}

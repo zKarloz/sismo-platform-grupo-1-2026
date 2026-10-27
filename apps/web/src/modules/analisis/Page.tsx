@@ -1,4 +1,5 @@
 /** Análisis estadístico de eventos persistidos; sin predicción de actividad futura. */
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { useEffect, useState } from 'react';
 import { BarChart3, ScatterChart as ScatterIcon } from 'lucide-react';
 import FilterBar from '../../components/analytics/FilterBar';
@@ -41,19 +42,19 @@ export default function Page() {
           <label className="text-xs text-muted">Agrupar por: <select className="ml-1 rounded-lg border border-border-ui bg-page px-2 py-1 text-main" value={interval} onChange={e => setInterval(e.target.value as 'day'|'month')}><option value="day">Día (UTC)</option><option value="month">Mes (UTC)</option></select></label>
         </div>
         <p className="my-3 text-xs text-muted">{series?.total ?? '—'} eventos en el filtro actual · intervalos sin registros omitidos</p>
-        {loading ? <p className="p-8 text-sm text-muted">Calculando...</p> : <SeriesChart data={series}/>}
+        {loading ? <LoadingSpinner label="Calculando serie temporal…" /> : <SeriesChart data={series}/>}
       </section>
       <section className="rounded-2xl border border-border-ui bg-panel p-5">
         <h2 className="font-semibold text-main">Histograma de magnitudes</h2>
         <p className="my-3 text-xs text-muted">El tipo de magnitud puede variar entre fuentes y eventos</p>
-        {loading ? <p className="p-8 text-sm text-muted">Calculando...</p> : <MagnitudesChart data={histogram}/>}
+        {loading ? <LoadingSpinner label="Calculando magnitudes…" /> : <MagnitudesChart data={histogram}/>}
       </section>
     </div>
     <section className="rounded-2xl border border-border-ui bg-panel p-5">
       <h2 className="flex items-center gap-2 font-semibold text-main"><ScatterIcon size={17} className="text-accent"/> Magnitud frente a profundidad</h2>
       <p className="mt-2 text-xs text-muted">Eje X: profundidad (km) · Eje Y: magnitud reportada. Cada punto es un sismo con ambas medidas.</p>
       {scatter?.truncated && <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300">Mostrando solo los {scatter.returned} registros más recientes de {scatter.total} válidos; muestra no representativa.</p>}
-      <div className="mt-4">{loading ? <p className="p-8 text-sm text-muted">Calculando...</p> : <DepthScatterChart data={scatter}/>}</div>
+      <div className="mt-4">{loading ? <LoadingSpinner label="Calculando profundidad…" /> : <DepthScatterChart data={scatter}/>}</div>
       <p className="mt-2 text-xs text-soft">Tamaño de muestra: {scatter?.returned ?? '—'} | Datos disponibles con ambas medidas: {scatter?.total ?? '—'}. Correlación visual no implica causalidad.</p>
     </section>
   </div>;

@@ -1,6 +1,6 @@
 /** Navegación responsiva y perfil desplegable; colores semánticos en index.css. */
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Activity, BellRing, ChevronDown, ChevronRight, LogOut, Menu, Moon, ShieldCheck, Sun, UserRound } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
 import { useTheme } from '../hooks/useTheme';
@@ -15,6 +15,10 @@ export default function AppLayout() {
   const { theme, toggleTheme } = useTheme();
   const dark = theme === 'dark';
   const { profile, logout } = useAuth();
+  // Breadcrumb derivado del mismo catálogo que alimenta el sidebar.
+  const location = useLocation();
+  const activeModule = navigation.find(item => item.path === location.pathname);
+  const sectionLabel = activeModule?.section === 'gestion' ? 'Administración' : 'Exploración';
 
   // Permite cerrar el menú con Escape o al pulsar fuera, también en móvil.
   useEffect(() => {
@@ -82,7 +86,11 @@ export default function AppLayout() {
         <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-border-ui bg-panel/95 px-5 backdrop-blur transition-colors sm:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <button type="button" onClick={() => setMenuOpen(true)} className="rounded-lg p-2 text-muted hover:bg-panel-alt lg:hidden" aria-label="Abrir menú"><Menu size={20} /></button>
-            <div className="min-w-0"><p className="truncate text-sm font-semibold text-main">Sistema de Monitoreo Sísmico</p><p className="text-xs text-soft">Acceso controlado · Fases 2 y 7</p></div>
+            <nav aria-label="Ubicación del módulo" className="flex min-w-0 items-center gap-2 text-sm">
+              <span className="shrink-0 text-muted">{sectionLabel}</span>
+              <ChevronRight size={15} className="shrink-0 text-soft" aria-hidden="true" />
+              <strong className="truncate text-main" aria-current="page">{activeModule?.label ?? 'Página no encontrada'}</strong>
+            </nav>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {/* El botón muestra únicamente el nombre; el rol se revela al abrir el perfil. */}

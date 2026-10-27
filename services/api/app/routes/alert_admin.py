@@ -5,6 +5,7 @@ from pydantic import SecretStr
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -13,6 +14,7 @@ from app.alerts.service import create_rule, activate_rule, review, simulate
 from app.alerts.gmail_test import (smtp_server_status, reserve_test,
     record_test_success, send_gmail_test)
 from app.db.session import get_read_engine
+from app.db.tables import events, sources
 
 router = APIRouter(tags=['Operación autorizada de alertas'])
 
@@ -91,6 +93,23 @@ def review_alert(alert_id: UUID, approve: bool,
         raise HTTPException(409, str(exc)) from None
     except SQLAlchemyError:
         raise HTTPException(503, 'No se pudo revisar alerta') from None
+
+
+@router.get('/admin/alert-rules/simulation/events')
+def simulation_events(actor: Principal = Depends(require_roles(
+        'administrador', 'analista', 'operador_alertas')),
+        engine: Engine = Depends(get_read_engine)) -> dict:
+    """Eventos IGP recientes para probar reglas, sin crear alertas ni entregas."""
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(select(
+                events.c.id, events.c.occurred_at, events.c.magnitude, events.c.place,
+            ).select_from(events.join(sources, events.c.source_id == sources.c.id))
+                .where(sources.c.name == 'IGP/CENSIS')
+                .order_by(events.c.occurred_at.desc()).limit(25)).mappings().all()
+        return {'items': [dict(row) for row in rows]}
+    except SQLAlchemyError:
+        raise HTTPException(503, 'Eventos para simulación no disponibles') from None
 
 
 @router.get('/admin/alert-rules/{rule_id}/simulate/{event_id}')

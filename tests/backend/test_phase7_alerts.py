@@ -14,6 +14,7 @@ from app.alerts.service import (
 from app.db.tables import (metadata, sources, runs, events, users, alert_rules, alerts,
                            deliveries, audit_logs)
 from app.db.session import get_read_engine
+from app.auth.security import require_user, Principal
 from app.main import app
 
 NOW = datetime(2026, 10, 23, 19, 0, tzinfo=timezone.utc)
@@ -154,13 +155,18 @@ def test_email_retries_backoff_max_three(engine):
         assert d['error_code'] == 'SMTP_SEND_FAILED'
 
 
-def test_public_read_only_api_hides_destination(engine):
+def test_authenticated_read_only_api_hides_destination(engine):
     set_rule(engine, channel='email', destination='secreto@example.org')
     add_event(engine)
     evaluate(engine, now=NOW)
     app.dependency_overrides[get_read_engine] = lambda: engine
     try:
         client = TestClient(app)
+        assert client.get('/api/v1/alert-rules').status_code == 401
+        assert client.get('/api/v1/alerts').status_code == 401
+        app.dependency_overrides[require_user] = lambda: Principal(
+            id=uuid4(), auth_user_id=uuid4(), email='lector@example.org',
+            full_name='Lector', role='solo_lectura', status='active')
         res = client.get('/api/v1/alert-rules')
         assert res.status_code == 200 and len(res.json()['items']) == 1
         history = client.get('/api/v1/alerts')

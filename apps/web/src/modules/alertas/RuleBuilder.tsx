@@ -1,7 +1,8 @@
 /** Constructor de reglas: solo Administrador. Guardado siempre desactivado. */
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import {useState} from 'react';
 import type {FormEvent} from 'react';
-import {BellPlus, ChevronDown, Info, ShieldCheck} from 'lucide-react';
+import {Info, ShieldCheck} from 'lucide-react';
 import {createAlertRule} from '../../services/alerts';
 import type {CreateRulePayload} from '../../services/alerts';
 
@@ -11,7 +12,6 @@ const BODY = 'IGP/CENSIS reportó un sismo de magnitud {magnitude} en {place} el
 const inputClass = 'w-full rounded-lg border border-border-ui bg-panel px-3 py-2 text-sm text-main focus:outline-none focus:ring-2 focus:ring-accent/30';
 
 export default function RuleBuilder({onCreated}:{onCreated:()=>void}) {
-  const [opened, setOpened] = useState(false);
   const [name, setName] = useState('');
   const [magnitude, setMagnitude] = useState('3.5');
   const [channel, setChannel] = useState<'email' | 'in_app'>('in_app');
@@ -66,14 +66,10 @@ export default function RuleBuilder({onCreated}:{onCreated:()=>void}) {
     } finally {setBusy(false);}
   };
 
-  return <section className="rounded-xl border border-border-ui bg-panel p-5" aria-label="Constructor de reglas de alertas">
-    <button type="button" aria-expanded={opened} onClick={()=>setOpened(v=>!v)} className="flex w-full items-center justify-between gap-2 text-left">
-      <span className="inline-flex items-center gap-2 font-semibold text-main"><BellPlus size={19} className="text-accent"/> Crear regla de alerta</span>
-      <ChevronDown size={17} className={`text-muted transition-transform ${opened?'rotate-180':''}`}/>
-    </button>
-    <p className="mt-2 text-sm text-muted">Personaliza la magnitud mínima y el canal. Solo un Administrador puede crear o activar reglas.</p>
-    {opened && <form onSubmit={e=>void submit(e)} className="mt-5 space-y-4">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+  // La apertura/cierre pertenece al modal común; aquí solo vive el formulario.
+  return <form onSubmit={e=>void submit(e)} className="min-w-0 space-y-4">
+      <p className="text-sm text-muted">Personaliza la magnitud mínima y el canal. Solo un Administrador puede crear o activar reglas.</p>
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2">
         <label className="block text-xs font-semibold text-main">Nombre de la regla
           <input required minLength={3} maxLength={120} className={`${inputClass} mt-1`} placeholder="Ej. Avisos por correo M3.5" value={name} onChange={e=>setName(e.target.value)}/>
         </label>
@@ -113,12 +109,12 @@ export default function RuleBuilder({onCreated}:{onCreated:()=>void}) {
             <input type="number" min="0" max="1000" step="0.1" className={`${inputClass} mt-1`} value={depth} onChange={e=>setDepth(e.target.value)} placeholder="Cualquier profundidad"/>
           </label>
           <p className="text-xs text-muted"><Info size={13} className="mr-1 inline"/>La zona se define mediante un rectángulo geográfico; NO equivale a la frontera oficial del Perú.</p>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
             {(['min_lat','max_lat','min_lon','max_lon'] as const).map(key=><label key={key} className="text-xs font-semibold text-main">{key.replace('_',' ').toUpperCase()}
               <input type="number" step="0.01" min={key.endsWith('lat')?'-90':'-180'} max={key.endsWith('lat')?'90':'180'} className={`${inputClass} mt-1`} value={bbox[key]} onChange={e=>setBbox(v=>({...v,[key]:Number(e.target.value)}))}/>
             </label>)}
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="text-xs font-semibold text-main">Hora inicio (Perú)
               <select value={startHour} onChange={e=>setStartHour(e.target.value)} className={`${inputClass} mt-1`}><option value="">Todo el día</option>{Array.from({length:24},(_,i)=><option key={i} value={i}>{String(i).padStart(2,'0')}:00</option>)}</select>
             </label>
@@ -138,9 +134,8 @@ export default function RuleBuilder({onCreated}:{onCreated:()=>void}) {
       {error && <p role="alert" className="rounded-lg border border-rose-400 p-3 text-sm text-rose-600 dark:text-rose-300">{error}</p>}
       {message && <p role="status" className="rounded-lg border border-border-ui bg-panel-alt p-3 text-sm text-main">{message}</p>}
       <div className="flex flex-wrap items-center gap-3">
-        <button disabled={busy} type="submit" className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"><ShieldCheck size={16}/>{busy?'Guardando...':'Crear regla desactivada'}</button>
+        <button disabled={busy} type="submit" className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy ? <LoadingSpinner size="sm" variant="inline" label="Guardando…" /> : <><ShieldCheck size={16}/>Crear regla desactivada</>}</button>
         <span className="text-xs text-muted">No activa reglas ni genera avisos históricos.</span>
       </div>
-    </form>}
-  </section>;
+  </form>;
 }

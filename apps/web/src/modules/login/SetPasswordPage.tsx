@@ -1,4 +1,5 @@
 /** Onboarding de invitaciones: Supabase Auth valida el enlace y guarda la clave. */
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { KeyRound, LockKeyhole, ShieldCheck } from 'lucide-react';
@@ -47,7 +48,7 @@ export default function SetPasswordPage() {
         <p className="mt-1 text-sm text-sidebar-muted">Sistema de Monitoreo Sísmico V2</p>
       </header>
       <div className="space-y-4 p-7">
-        {loading && <p role="status" className="text-sm text-muted">Verificando la invitación…</p>}
+        {loading && <LoadingSpinner label="Verificando la invitación…" />}
         {!loading && !authenticated && <div className="space-y-3">
           <p className="text-sm text-muted">No se encontró una invitación válida. Abre el enlace enviado a tu correo o solicita uno nuevo al Administrador.</p>
           <Link to="/login" className="inline-block rounded-lg border border-border-ui px-4 py-2 text-sm text-main">Ir al login</Link>
@@ -63,7 +64,7 @@ export default function SetPasswordPage() {
               className="mt-2 w-full rounded-lg border border-border-ui bg-page px-3 py-2.5 text-main"/>
           </label>
           <button type="submit" disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-lg bg-sidebar px-4 py-3 text-sm font-semibold text-white disabled:opacity-50">
-            <LockKeyhole size={17}/>{busy ? 'Guardando…' : 'Guardar contraseña y entrar'}
+            {busy ? <LoadingSpinner size="sm" variant="inline" label="Guardando…" /> : <><LockKeyhole size={17}/>Guardar contraseña y entrar</>}
           </button>
           <p className="flex items-start gap-2 text-xs text-muted"><ShieldCheck size={16}/> La contraseña se transmite a Supabase Auth, no a nuestro backend.</p>
         </form>}

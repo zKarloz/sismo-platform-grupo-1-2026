@@ -9,6 +9,7 @@ import L from 'leaflet';
 import { CalendarClock, ExternalLink, Layers, List, MapPin, RefreshCw, X } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import './mapStyles.css';
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import FilterBar from '../../components/analytics/FilterBar';
 import AppliedFiltersAside from '../../components/analytics/AppliedFiltersAside';
 import { useAnalyticsFilters } from '../../hooks/useAnalyticsFilters';
@@ -54,10 +55,10 @@ function FitMarkers({ features, focused, loading, defaultCenter, defaultBounds }
     }
     if (valid.length === 1) map.setView(valid[0], 8);
     else map.fitBounds(L.latLngBounds(valid).pad(0.15), { maxZoom: 8 });
-    // Sólo nuevas consultas y cambios geográficos justifican autoencuadrar.
-    // No incluir focused: los popups no controlan el encuadre del mapa.
+  // Sólo nuevas consultas y cambios geográficos justifican autoencuadrar.
+  // No incluir focused: los popups no controlan el encuadre del mapa.
   }, [features, loading, map, defaultCenter?.[0], defaultCenter?.[1],
-    defaultBounds?.[0][0], defaultBounds?.[0][1], defaultBounds?.[1][0], defaultBounds?.[1][1]]);
+      defaultBounds?.[0][0], defaultBounds?.[0][1], defaultBounds?.[1][0], defaultBounds?.[1][1]]);
   return null;
 }
 
@@ -105,7 +106,7 @@ function Epicenter({ feature, focused, liveFallback, autoZoom = false, onClose }
       <div className="space-y-1 text-sm">
         <strong>{event.place || 'Ubicación no publicada'}</strong>
         <p className="flex items-center gap-2">Magnitud:
-          <span aria-hidden="true" className="inline-block h-3 w-3 rounded-full border" style={{ backgroundColor: color, borderColor: color }} />
+          <span aria-hidden="true" className="inline-block h-3 w-3 rounded-full border" style={{ backgroundColor: color, borderColor: color }}/>
           {event.magnitude == null ? 'Sin dato' : `${event.magnitude.toFixed(1)} ${event.magnitude_type ?? ''}`}
         </p>
         <p>Profundidad: {event.depth_km == null ? 'Sin dato' : `${event.depth_km.toFixed(1)} km`}</p>
@@ -113,7 +114,7 @@ function Epicenter({ feature, focused, liveFallback, autoZoom = false, onClose }
         <p>Fecha/hora Perú: {peruDate(event.occurred_at, true)}</p>
         <p>Fuente: IGP/CENSIS</p>
         {liveFallback && <p>Reporte IGP en vivo, pendiente de confirmar su presencia en el catálogo sincronizado.</p>}
-        {event.source_url?.startsWith('https://') && <a href={event.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-blue-700">Ver fuente oficial <ExternalLink size={12} /></a>}
+        {event.source_url?.startsWith('https://') && <a href={event.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-blue-700">Ver fuente oficial <ExternalLink size={12}/></a>}
       </div>
     </Popup>
   </CircleMarker>;
@@ -197,46 +198,46 @@ function ClusteredMarkers({ features, selectedId, dashboardTargetId, onSelect }:
   return <>
     {clusters.map(cluster => cluster.events.length === 1
       ? <Epicenter key={cluster.key} feature={cluster.events[0]}
-        focused={cluster.events[0].properties.external_id === selectedId}
-        autoZoom={cluster.events[0].properties.external_id === dashboardTargetId}
-        onClose={cluster.events[0].properties.external_id === selectedId && selectedId !== dashboardTargetId
-          ? () => onSelect(null) : undefined}
-        liveFallback={cluster.events[0].id.startsWith('igp-live-')} />
+          focused={cluster.events[0].properties.external_id === selectedId}
+          autoZoom={cluster.events[0].properties.external_id === dashboardTargetId}
+          onClose={cluster.events[0].properties.external_id === selectedId && selectedId !== dashboardTargetId
+            ? () => onSelect(null) : undefined}
+          liveFallback={cluster.events[0].id.startsWith('igp-live-')}/>
       : <CircleMarker key={cluster.key} center={[cluster.latitude, cluster.longitude]}
-        radius={19} pathOptions={{ className: 'sismo-cluster-circle', color: '#155e75', fillColor: '#155e75', weight: 2, fillOpacity: 0.9 }}>
-        {/* La etiqueta permanente solo muestra el número, nunca el resumen.
+          radius={19} pathOptions={{ className: 'sismo-cluster-circle', color: '#155e75', fillColor: '#155e75', weight: 2, fillOpacity: 0.9 }}>
+          {/* La etiqueta permanente solo muestra el número, nunca el resumen.
               Popup utiliza leaflet-popup-pane, por encima de tooltip-pane. */}
-        <Tooltip permanent direction="center" opacity={1} className="sismo-cluster-label">
-          <span className="sismo-cluster-count">{cluster.events.length}</span>
-        </Tooltip>
-        <Popup className="sismo-event-popup sismo-cluster-popup" minWidth={180} maxWidth={340} autoPan>
-          <div className="sismo-cluster-detail"
-            ref={node => { if (node) L.DomEvent.disableScrollPropagation(node); }}
-            onWheel={event => event.stopPropagation()}
-            aria-label={`Detalle de ${cluster.events.length} epicentros próximos`}>
-            <strong className="sismo-cluster-title">{cluster.events.length} epicentros próximos</strong>
-            <p className="sismo-cluster-description">Agrupación visual; no representa una zona de impacto.</p>
-            <ul className="sismo-cluster-events" aria-label="Sismos del agrupamiento">
-              {cluster.events.map(event => <li key={event.id}>
-                <button type="button" className="sismo-cluster-event"
-                  onClick={mouseEvent => { mouseEvent.stopPropagation(); selectEventFromGroup(event); }}>
-                  <span aria-hidden="true" className="sismo-cluster-event-dot"
-                    style={{ backgroundColor: magnitudeColor(event.properties.magnitude) }} />
-                  <span>{peruDate(event.properties.occurred_at, true)} · M{event.properties.magnitude?.toFixed(1) ?? '—'}</span>
-                </button>
-              </li>)}
-            </ul>
-            <p className="sismo-cluster-help">Selecciona un evento para acercar el mapa y abrir sus detalles.</p>
-          </div>
-        </Popup>
-      </CircleMarker>)}
+          <Tooltip permanent direction="center" opacity={1} className="sismo-cluster-label">
+            <span className="sismo-cluster-count">{cluster.events.length}</span>
+          </Tooltip>
+          <Popup className="sismo-event-popup sismo-cluster-popup" minWidth={180} maxWidth={340} autoPan>
+            <div className="sismo-cluster-detail"
+              ref={node => { if (node) L.DomEvent.disableScrollPropagation(node); }}
+              onWheel={event => event.stopPropagation()}
+              aria-label={`Detalle de ${cluster.events.length} epicentros próximos`}>
+              <strong className="sismo-cluster-title">{cluster.events.length} epicentros próximos</strong>
+              <p className="sismo-cluster-description">Agrupación visual; no representa una zona de impacto.</p>
+              <ul className="sismo-cluster-events" aria-label="Sismos del agrupamiento">
+                {cluster.events.map(event => <li key={event.id}>
+                  <button type="button" className="sismo-cluster-event"
+                    onClick={mouseEvent => { mouseEvent.stopPropagation(); selectEventFromGroup(event); }}>
+                    <span aria-hidden="true" className="sismo-cluster-event-dot"
+                      style={{ backgroundColor: magnitudeColor(event.properties.magnitude) }}/>
+                    <span>{peruDate(event.properties.occurred_at, true)} · M{event.properties.magnitude?.toFixed(1) ?? '—'}</span>
+                  </button>
+                </li>)}
+              </ul>
+              <p className="sismo-cluster-help">Selecciona un evento para acercar el mapa y abrir sus detalles.</p>
+            </div>
+          </Popup>
+        </CircleMarker>)}
     {/* El foco manual aparece a zoom de detalle. Al alejar por debajo de 12,
         se oculta para que ninguna marca extra tape el contador del grupo.
         Los enlaces desde Dashboard siguen mostrando siempre su sismo. */}
     {selectedFeature && selectedInGroup && (zoom >= 12 || selectedId === dashboardTargetId) && <Epicenter key={`selected:${selectedFeature.id}`}
       feature={selectedFeature} focused autoZoom={selectedId === dashboardTargetId}
       liveFallback={selectedFeature.id.startsWith('igp-live-')}
-      onClose={selectedId !== dashboardTargetId ? () => onSelect(null) : undefined} />}
+      onClose={selectedId !== dashboardTargetId ? () => onSelect(null) : undefined}/>} 
   </>;
 }
 
@@ -253,7 +254,7 @@ function MagnitudeLegend() {
     <div className="flex flex-wrap gap-x-5 gap-y-2">
       {entries.map(entry => <div key={entry.label} className="flex items-center gap-2">
         <span className="inline-block h-4 w-4 shrink-0 rounded-full border-2"
-          style={{ backgroundColor: entry.color, borderColor: entry.color }} />
+          style={{ backgroundColor: entry.color, borderColor: entry.color }}/>
         <span>{entry.label}</span>
       </div>)}
     </div>
@@ -330,8 +331,8 @@ export default function Page() {
     if (!department || !boundary || boundary.department !== department) return effectiveFilters;
     // Un departamento sustituye otros recortes geográficos; jamás enviar
     // radio + rectángulo simultáneamente al backend (sería HTTP 422).
-    const { min_lat: _a, max_lat: _b, min_lon: _c, max_lon: _d,
-      center_lat: _e, center_lon: _f, radius_km: _g, ...otherFilters } = effectiveFilters;
+    const {min_lat: _a, max_lat: _b, min_lon: _c, max_lon: _d,
+      center_lat: _e, center_lon: _f, radius_km: _g, ...otherFilters} = effectiveFilters;
     void [_a, _b, _c, _d, _e, _f, _g];
     return { ...otherFilters, ...departmentBounds(boundary) };
   }, [effectiveFilters, department, boundary]);
@@ -384,7 +385,7 @@ export default function Page() {
     Number.isFinite(feature.geometry.coordinates[1]) &&
     matchesPeruPeriod(feature.properties.occurred_at, effectiveFilters) &&
     (!department || (boundary !== null && pointInDepartment(feature.geometry.coordinates, boundary)))),
-    [dataset, effectiveFilters, department, boundary]);
+  [dataset, effectiveFilters, department, boundary]);
   const { features, fallback, displayedCatalog } = useMemo(() => {
     const exists = Boolean(targetId && catalogFeatures.some(feature => feature.properties.external_id === targetId));
     // El enlace IGP en vivo no modifica el conjunto usado para autoencuadrar.
@@ -425,10 +426,10 @@ export default function Page() {
       <div>
         <strong>Epicentro seleccionado: {targetId}</strong>
         {focused && <p className="mt-1 text-xs text-muted">Se ha centrado el mapa y abierto su ficha automáticamente.{fallback ? ' El reporte en vivo todavía no aparece entre los puntos consultados.' : ''}</p>}
-        {igpTarget.loading && !focused && <p className="mt-1 text-xs text-muted">Localizando reporte en IGP…</p>}
+        {igpTarget.loading && !focused && <LoadingSpinner variant="inline" size="sm" label="Localizando reporte en IGP…" className="mt-1" />}
         {unresolved && <p role="status" className="mt-1 text-xs text-muted">No se encontró este ID en el catálogo filtrado ni en los reportes recientes del IGP. Prueba ampliar las fechas o actualizar la fuente.</p>}
       </div>
-      <button type="button" onClick={clearFocus} className="inline-flex items-center gap-1.5 rounded-lg border border-border-ui bg-panel px-3 py-2 text-xs font-medium text-main hover:bg-page"><X size={14} /> Quitar selección</button>
+      <button type="button" onClick={clearFocus} className="inline-flex items-center gap-1.5 rounded-lg border border-border-ui bg-panel px-3 py-2 text-xs font-medium text-main hover:bg-page"><X size={14}/> Quitar selección</button>
     </div>}
 
     {department && <p className="rounded-lg border border-border-ui bg-panel-alt p-3 text-sm text-main">
@@ -446,13 +447,13 @@ export default function Page() {
       <article className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-border-ui bg-panel shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-ui p-4">
           <div>
-            <h2 className="flex items-center gap-2 font-semibold text-main"><MapPin size={17} className="text-accent" /> Epicentros IGP/CENSIS</h2>
+            <h2 className="flex items-center gap-2 font-semibold text-main"><MapPin size={17} className="text-accent"/> Epicentros IGP/CENSIS</h2>
             <p className="mt-1 text-xs text-muted">Catálogo sincronizado · Fecha civil de Perú · Fuente exclusiva IGP</p>
           </div>
           <div className="flex items-center gap-3 text-xs text-muted">
             {loadingBoundary ? 'Consultando límite…' : loading ? 'Consultando…' : department ? `${displayedCatalog} epicentros dentro de ${departmentName ?? department}` : `${displayedCatalog} de ${dataset?.total ?? 0} eventos del período`}
             <button type="button" onClick={() => { refresh(); if (targetId) igpTarget.refresh(); }}
-              className="inline-flex items-center gap-1 rounded-lg border border-border-ui px-2 py-1.5 text-main hover:bg-panel-alt" aria-label="Actualizar mapa IGP"><RefreshCw size={13} /> Actualizar</button>
+              className="inline-flex items-center gap-1 rounded-lg border border-border-ui px-2 py-1.5 text-main hover:bg-panel-alt" aria-label="Actualizar mapa IGP"><RefreshCw size={13}/> Actualizar</button>
           </div>
         </div>
         {department && dataset?.truncated && <p role="status" className="border-b border-border-ui bg-panel-alt px-4 py-2 text-sm text-main">El área del departamento devuelve más de 1.000 eventos en el período; acota las fechas para obtener un recorte completo.</p>}
@@ -467,28 +468,28 @@ export default function Page() {
             <LayersControl position="topright">
               <LayersControl.BaseLayer checked name="OpenStreetMap">
                 <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>' maxZoom={17} />
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>' maxZoom={17}/>
               </LayersControl.BaseLayer>
               {/* MapTiler utiliza los mismos datos IGP y capas Leaflet existentes;
                   únicamente cambia el fondo. La clave debe estar autorizada para
                   localhost y el dominio de Vercel antes de activar estos estilos. */}
               {MAPTILER_KEY && <LayersControl.BaseLayer name="Claro (MapTiler)">
                 <TileLayer url={mapTilerRaster('dataviz-light', 'png')}
-                  attribution={MAPTILER_ATTRIBUTION} maxZoom={19} />
+                  attribution={MAPTILER_ATTRIBUTION} maxZoom={19}/>
               </LayersControl.BaseLayer>}
               {MAPTILER_KEY && <LayersControl.BaseLayer name="Oscuro (MapTiler)">
                 <TileLayer url={mapTilerRaster('dataviz-dark', 'png')}
-                  attribution={MAPTILER_ATTRIBUTION} maxZoom={19} />
+                  attribution={MAPTILER_ATTRIBUTION} maxZoom={19}/>
               </LayersControl.BaseLayer>}
               {MAPTILER_KEY && <LayersControl.BaseLayer name="Satélite (MapTiler)">
                 <TileLayer url={mapTilerRaster('satellite-v4', 'jpg')}
-                  attribution={MAPTILER_ATTRIBUTION} maxZoom={19} />
+                  attribution={MAPTILER_ATTRIBUTION} maxZoom={19}/>
               </LayersControl.BaseLayer>}
               <LayersControl.BaseLayer name="Sin mapa base">
                 <LayerGroup />
               </LayersControl.BaseLayer>
             </LayersControl>
-            <ActiveLayerTracker onChange={setLayerName} />
+            <ActiveLayerTracker onChange={setLayerName}/>
             {boundary && department && boundary.department === department && boundary.features.flatMap((feature, fi) => {
               const polygons = feature.geometry.type === 'Polygon'
                 ? [feature.geometry.coordinates] : feature.geometry.coordinates;
@@ -498,10 +499,10 @@ export default function Page() {
             })}
             {isRadial && <Circle center={[effectiveFilters.center_lat!, effectiveFilters.center_lon!]}
               radius={effectiveFilters.radius_km! * 1000}
-              pathOptions={{ color: '#0891b2', weight: 2, dashArray: '6 5', fillOpacity: 0.04 }} />}
+              pathOptions={{ color: '#0891b2', weight: 2, dashArray: '6 5', fillOpacity: 0.04 }}/>} 
             {isRectangular && <Rectangle
               bounds={[[effectiveFilters.min_lat!, effectiveFilters.min_lon!], [effectiveFilters.max_lat!, effectiveFilters.max_lon!]]}
-              pathOptions={{ color: '#0891b2', weight: 2, dashArray: '6 5', fillOpacity: 0.04 }} />}
+              pathOptions={{ color: '#0891b2', weight: 2, dashArray: '6 5', fillOpacity: 0.04 }}/>} 
             <FitMarkers features={catalogFeatures} focused={focused} loading={loading}
               defaultCenter={isRadial ? [effectiveFilters.center_lat!, effectiveFilters.center_lon!] : undefined}
               defaultBounds={department && boundary ? (() => {
@@ -510,8 +511,8 @@ export default function Page() {
               })() : isRectangular ? [
                 [effectiveFilters.min_lat!, effectiveFilters.min_lon!],
                 [effectiveFilters.max_lat!, effectiveFilters.max_lon!],
-              ] : undefined} />
-            <ClusteredMarkers features={features} selectedId={selectedId} dashboardTargetId={targetId} onSelect={setManualFocusId} />
+              ] : undefined}/>
+            <ClusteredMarkers features={features} selectedId={selectedId} dashboardTargetId={targetId} onSelect={setManualFocusId}/>
           </MapContainer>
           {/* El plan Free de MapTiler exige, además de la atribución de Leaflet,
               un logotipo enlazado mientras se utilice cualquiera de sus capas. */}
@@ -522,15 +523,16 @@ export default function Page() {
               <img src="https://api.maptiler.com/resources/logo.svg" alt="MapTiler"
                 className="h-5 w-auto max-w-[100px]" loading="lazy" />
             </a>}
-          {!loading && features.length === 0 && !error && !boundaryError && !loadingBoundary && <div className="pointer-events-none absolute left-1/2 top-4 z-10 w-max max-w-[90%] -translate-x-1/2 rounded-lg bg-panel p-3 text-center text-sm text-main shadow-lg">No hay epicentros para los filtros actuales.</div>}
+          {(loading || loadingBoundary) && !error && !boundaryError && <LoadingSpinner variant="overlay" label="Cargando epicentros…" />}
+           {!loading && features.length === 0 && !error && !boundaryError && !loadingBoundary && <div className="pointer-events-none absolute left-1/2 top-4 z-10 w-max max-w-[90%] -translate-x-1/2 rounded-lg bg-panel p-3 text-center text-sm text-main shadow-lg">No hay epicentros para los filtros actuales.</div>}
         </div>
-        <MagnitudeLegend />
+        <MagnitudeLegend/>
         <div className="flex flex-wrap items-center gap-4 px-4 py-3 text-xs text-muted">
-          <span className="inline-flex items-center gap-1"><Layers size={13} /> Capa activa: {layerName}</span>
+          <span className="inline-flex items-center gap-1"><Layers size={13}/> Capa activa: {layerName}</span>
           {!MAPTILER_KEY && <span className="text-muted" title="Configura VITE_MAPTILER_KEY para activar Claro, Oscuro y Satélite">
             Estilos opcionales: configura MapTiler para habilitar claro, oscuro y satélite.
           </span>}
-          <span className="inline-flex items-center gap-1"><CalendarClock size={13} /> Consulta: {localDateTime(lastConsultation)}</span>
+          <span className="inline-flex items-center gap-1"><CalendarClock size={13}/> Consulta: {localDateTime(lastConsultation)}</span>
           <span>Última ingesta IGP: {localDateTime(lastSync)}</span>
           <span>El color indica el rango de magnitud, no el peligro ni la intensidad; el tamaño es secundario.</span>
           <span>Grupos numerados: clic o toque para abrir la lista; seleccionar un evento acerca el mapa.</span>
@@ -540,10 +542,10 @@ export default function Page() {
         </div>
       </article>
       <AppliedFiltersAside filters={effectiveFilters} sampleSize={department ? displayedCatalog : dataset?.total}
-        lastSync={lastSync} geoDescription={department ? `${departmentName} (límite referencial; epicentros terrestres)` : undefined} />
+        lastSync={lastSync} geoDescription={department ? `${departmentName} (límite referencial; epicentros terrestres)` : undefined}/>
     </section>
     <details className="rounded-xl border border-border-ui bg-panel p-4 text-main">
-      <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold"><List size={16} /> Lista accesible de epicentros ({features.length})</summary>
+      <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold"><List size={16}/> Lista accesible de epicentros ({features.length})</summary>
       <p className="mt-2 text-xs text-muted">Selecciona un evento para centrar el mapa y abrir la misma ficha de detalles. Los registros se presentan por fecha.</p>
       <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {accessibleFeatures.map(feature => <li key={feature.id}>

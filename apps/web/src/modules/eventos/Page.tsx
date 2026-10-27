@@ -1,4 +1,5 @@
 /** Catálogo real de sismos persistidos con filtros y paginación de servidor. */
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Archive, Activity, ArrowUpRight, ChevronLeft, ChevronRight, Filter, RefreshCw } from 'lucide-react';
 import { getEvents, type EventFilters } from '../../services/seismic';
@@ -102,7 +103,7 @@ export default function Page() {
           <span className="text-xs text-muted">{data?.total ?? '—'} eventos</span>
         </div>
         {error && <p role="alert" className="m-4 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200">{error}. Comprueba FastAPI y Supabase.</p>}
-        {loading ? <p className="p-8 text-center text-sm text-muted">Consultando eventos...</p>
+        {loading ? <LoadingSpinner label="Consultando eventos…" />
           : data?.items.length ? (
             <div className="overflow-x-auto"><table className="w-full min-w-[1250px] text-left text-sm">
               <thead className="bg-panel-alt text-xs uppercase text-muted"><tr>

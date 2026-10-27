@@ -45,3 +45,17 @@ export interface DataSource {
   last_success_at: string | null;
   last_run: IngestionRun | null;
 }
+
+/** Detalle de una ejecución IGP; la duración es calculada por FastAPI. */
+export interface IngestionRunDetail extends IngestionRun {
+  source_id: string;
+  duration_seconds: number | null;
+}
+export type IngestionStatus = 'running' | 'success' | 'partial' | 'failed';
+export interface IngestionHistory {
+  items: IngestionRunDetail[];
+  total: number;
+  page: number;
+  pages: number;
+  page_size: number;
+}

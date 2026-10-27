@@ -84,3 +84,27 @@ def test_auditoria_protegida_con_rbac(audit_setup):
     assert audit_setup.get('/api/v1/admin/audit').status_code == 401
     assert audit_setup.get('/api/v1/admin/audit',
                            headers={'Authorization': 'Bearer viewer'}).status_code == 403
+
+
+def test_auditoria_filtros_y_paginacion(audit_setup):
+    """Filtros y contadores reales, sin romper el contrato de fases anteriores."""
+    token = {'Authorization':'Bearer admin'}
+    response = audit_setup.get('/api/v1/admin/audit?page=1&page_size=5&category=usuarios&q=Ana',headers=token)
+    assert response.status_code == 200
+    data = response.json()
+    assert data['page_size'] == 5
+    assert data['total'] == 1
+    assert data['pages'] == 1
+    assert data['summary']['correctos'] == 1
+    assert data['items'][0]['action'] == 'identity.user.updated'
+    assert data['items'][0]['correlation_id'] is None
+    only_alerts = audit_setup.get('/api/v1/admin/audit?category=alertas&page_size=10',headers=token)
+    assert only_alerts.status_code == 200
+    assert only_alerts.json()['total'] == 1
+    # FastAPI interpreta parámetros query como texto: 5, 10 y 20 deben aceptarse.
+    for size in (5, 10, 20):
+        valid = audit_setup.get(f'/api/v1/admin/audit?page_size={size}', headers=token)
+        assert valid.status_code == 200
+        assert valid.json()['page_size'] == size
+    assert audit_setup.get('/api/v1/admin/audit?page_size=7',headers=token).status_code == 422
+    assert audit_setup.get('/api/v1/admin/audit?start_date=2026-10-27&end_date=2026-10-26',headers=token).status_code == 422

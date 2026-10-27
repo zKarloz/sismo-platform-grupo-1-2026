@@ -1,0 +1,78 @@
+/*
+ * Ajuste de geometría para los modales que solicitan mobileSheet.
+ * No afecta a los demás modales ni cambia los tokens del tema.
+ * Incluye dispositivos táctiles que solicitan la versión de escritorio,
+ * siempre que el viewport CSS permanezca por debajo de 1024 px.
+ */
+@media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-width: 1023px) {
+  .sismo-modal-mobile-overlay.sismo-modal-mobile-overlay {
+    /* Evita que un ancestro o una medida intrínseca ensanche el panel. */
+    position: fixed;
+    inset: 0;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    height: 100dvh;
+    min-height: 0;
+    padding: 0;
+    align-items: flex-end;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .sismo-modal-mobile-panel.sismo-modal-mobile-panel {
+    box-sizing: border-box;
+    flex: 0 1 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    max-height: calc(100dvh - 0.5rem);
+    margin: 0;
+    border-radius: 1rem 1rem 0 0;
+  }
+
+  .sismo-modal-mobile-body {
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* Los controles nativos de fecha, especialmente en Safari iOS,
+     pueden superar el ancho del grid pese a llevar w-full. */
+  .sismo-modal-mobile-body fieldset,
+  .sismo-modal-mobile-body label,
+  .sismo-modal-mobile-body select,
+  .sismo-modal-mobile-body input[type='date'] {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .sismo-modal-mobile-body select,
+  .sismo-modal-mobile-body input[type='date'] {
+    display: block;
+    width: 100%;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  .sismo-modal-mobile-footer {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .sismo-modal-mobile-footer > div {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+/* En PC se mantiene el modal centrado y su anchura original. */

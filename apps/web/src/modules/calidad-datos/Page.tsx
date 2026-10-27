@@ -1,4 +1,5 @@
 /** Calidad y datasets observados; escritura restringida a CLI hasta tener RBAC. */
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { useEffect, useState } from 'react';
 import { CheckCircle2, Database, FileCheck2, RefreshCw, ShieldAlert } from 'lucide-react';
 import FilterBar from '../../components/analytics/FilterBar';
@@ -43,7 +44,7 @@ export default function Page() {
     </header>
     <FilterBar />
     {error && <p role="alert" className="rounded-xl border border-rose-400 p-3 text-sm text-rose-600 dark:text-rose-300">{error}. Si falta la tabla datasets, ejecuta la migración 002 en Supabase.</p>}
-    {loading && <p className="rounded-xl border border-border-ui bg-panel p-5 text-sm text-muted">Calculando indicadores de calidad...</p>}
+    {loading && <div className="rounded-xl border border-border-ui bg-panel"><LoadingSpinner label="Calculando indicadores de calidad…" /></div>}
     {!loading && quality && <>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[

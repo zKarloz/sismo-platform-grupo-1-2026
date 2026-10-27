@@ -5,6 +5,7 @@
  * explícitamente al intervalo UTC completo, sin usar la zona del navegador.
  * Las exportaciones reutilizan exactamente los filtros de la última consulta.
  */
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import {useEffect, useState, type FormEvent} from 'react';
 import {Archive, ArrowUpRight, CalendarRange, ChevronLeft, ChevronRight, Download, Info, RefreshCcw, Search} from 'lucide-react';
 import {useAuth} from '../../auth/AuthProvider';
@@ -193,12 +194,12 @@ export default function Page() {
           {canExport && !!result?.total && !pending && (['csv', 'xlsx', 'pdf'] as const).map(format =>
             <button key={format} type="button" disabled={!!exporting || (format === 'pdf' && result.total > 400) || (format !== 'pdf' && result.total > 5000)}
               onClick={() => void download(format)} className="inline-flex items-center gap-2 rounded-lg border border-border-ui px-3 py-2 text-xs font-semibold uppercase text-main hover:bg-panel-alt disabled:opacity-40">
-              <Download size={15}/>{exporting === format ? 'Generando…' : format}
+              {exporting === format ? <LoadingSpinner size="sm" variant="inline" label="Generando…" /> : <><Download size={15}/>{format}</>}
             </button>)}
         </div>
         {!!result?.total && result.total > 400 && <p className="w-full text-xs text-muted">PDF: máximo 400 registros; ajusta el período, magnitud o zona. CSV/XLSX: máximo 5.000, sujeto a la configuración del sistema.</p>}
       </div>
-      {pending ? <p className="p-8 text-center text-sm text-muted">Consultando el snapshot histórico IGP…</p>
+      {pending ? <LoadingSpinner label="Consultando el histórico IGP…" />
         : result?.items.length ? <div className="overflow-x-auto"><table className="w-full min-w-[1070px] text-left text-sm">
           <thead className="bg-panel-alt text-xs uppercase text-muted"><tr>
             {['Fecha UTC', 'Magnitud', 'Prof. km', 'Latitud', 'Longitud', 'Fuente', 'ID catálogo', 'Origen oficial'].map(label =>

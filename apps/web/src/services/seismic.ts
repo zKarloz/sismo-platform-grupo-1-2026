@@ -1,5 +1,6 @@
 /** Cliente HTTP de los endpoints de solo lectura de FastAPI. */
-import type { DataSource, EventPage } from '../types/seismic';
+import type { DataSource, EventPage, IngestionHistory, IngestionStatus } from '../types/seismic';
+import { apiAuthed } from '../auth/api';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
@@ -21,4 +22,12 @@ export function getEvents(filters: EventFilters = {}, signal?: AbortSignal): Pro
 
 export function getSources(signal?: AbortSignal): Promise<{items: DataSource[]}> {
   return readJSON<{items: DataSource[]}>('/api/v1/sources', signal);
+}
+
+/** Logs reales de IGP/CENSIS, paginados desde PostgreSQL y protegidos con JWT. */
+export function getIGPRuns(page: number, pageSize: 5 | 10 | 20,
+  status: IngestionStatus | '' = '', signal?: AbortSignal): Promise<IngestionHistory> {
+  const query = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  if (status) query.set('status', status);
+  return apiAuthed<IngestionHistory>(`/api/v1/sources/igp/runs?${query.toString()}`, { signal });
 }

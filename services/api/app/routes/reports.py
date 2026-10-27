@@ -6,7 +6,7 @@ públicos ni se devuelve una URL de descarga sin autorización.
 from __future__ import annotations
 
 import csv
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from io import StringIO
 from typing import Literal
 from uuid import uuid4
@@ -14,14 +14,16 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.auth.security import Principal, require_user, require_roles
 from app.db.session import get_read_engine
 from app.db.tables import report_exports, system_settings, audit_logs, users
-from app.reports.service import KINDS, query_report, render_file, checksum, csv_cell
+from app.audit.filters import AuditCategory, AuditResult, audit_join, audit_conditions
+from app.reports.service import (KINDS, IGP_SOURCE, IGP_REPORT_NOTES,
+                                 query_report, render_file, checksum, csv_cell)
 
 router = APIRouter(prefix='/reports', tags=['Reportes auditados'])
 admin_router = APIRouter(prefix='/admin/system', tags=['Configuración'])
@@ -54,7 +56,8 @@ class ReportInput(BaseModel):
     name: str = Field(default='', max_length=100)
     start_at: datetime | None = None
     end_at: datetime | None = None
-    source: str | None = Field(default=None,max_length=80)
+    # Compatibilidad con clientes previos: solo acepta la fuente oficial habilitada.
+    source: Literal["IGP/CENSIS"] | None = None
     min_magnitude: float | None = Field(default=None,ge=-3,le=12)
     south: float | None = Field(default=None,ge=-90,le=90)
     north: float | None = Field(default=None,ge=-90,le=90)
@@ -101,22 +104,26 @@ def generate_report(data: ReportInput, principal: Principal = Depends(require_us
         bounds = (data.south,data.west,data.north,data.east)
     # GET ni una URL con datos privados: archivo siempre como respuesta autenticada.
     filters = data.model_dump(exclude_none=True,exclude={'kind','format','name'},mode='json')
+    # Metadatos de procedencia guardados en el manifiesto (no se elimina USGS).
+    filters['source'] = IGP_SOURCE
+    filters['source_policy'] = 'igp_only' 
     try:
         with engine.begin() as conn:
             settings = current_settings(conn)
             max_rows = min(settings['max_report_rows'], 400 if data.format=='pdf' else 5000)
             rows = query_report(conn,data.kind,cutoff,data.start_at,data.end_at,
-                                data.source,data.min_magnitude,bounds,max_rows)
+                                IGP_SOURCE,data.min_magnitude,bounds,max_rows)
             if len(rows) > max_rows:
                 # Descarga no realizada; dejar error claro sin recortar resultados.
                 raise HTTPException(413,f'Más de {max_rows} filas. Reduce el periodo o los filtros.')
             if not rows:
                 # Un archivo vacío no es un fallo del PDF: el filtro de consulta no tuvo
                 # coincidencias. No guardamos un manifiesto de reporte con 0 filas.
-                # Suele ocurrir al alternar entre USGS e IGP o cambiar el período.
-                raise HTTPException(422, 'No hay registros para los filtros seleccionados. '
-                    'Revisa fuente (IGP/CENSIS o USGS), fechas, magnitud y zona.')
-            binary,media = render_file(data.kind,data.format,rows,cutoff)
+                # Los datasets mixtos/sin snapshots IGP verificados no se exportan.
+                raise HTTPException(422, 'No hay registros IGP/CENSIS verificables para estos filtros. '
+                    'Revisa las fechas y la zona; para ML y calidad, confirma los snapshots del dataset.')
+            binary,media = render_file(data.kind,data.format,rows,cutoff,
+                                       IGP_REPORT_NOTES[data.kind])
             report_id=uuid4()
             filename=f'sismo_{data.kind}_{cutoff.strftime("%Y%m%dT%H%M%SZ")}_{str(report_id)[:8]}.{data.format}'
             conn.execute(report_exports.insert().values(
@@ -147,6 +154,16 @@ def report_history(page: int = Query(1,ge=1), page_size: int = Query(10,ge=5,le=
                    engine: Engine = Depends(get_read_engine)) -> dict:
     # Administradores y auditores ven el manifiesto completo, sin los archivos.
     scope = [] if principal.role in ('administrador','auditor') else [report_exports.c.requester_id==principal.id]
+    # No atribuir a IGP los reportes históricos sin procedencia demostrable.
+    # Los manifiestos antiguos continúan en PostgreSQL para auditoría interna.
+    # Se muestran los nuevos con política IGP o los antiguos de eventos/alertas/
+    # fuentes cuyo filtro especificaba expresamente IGP/CENSIS.
+    provenance = or_(
+        report_exports.c.filters['source_policy'].as_string() == 'igp_only',
+        and_(report_exports.c.report_type.in_(('events','alerts','sources')),
+             report_exports.c.filters['source'].as_string() == IGP_SOURCE),
+    )
+    scope.append(provenance)
     try:
         with engine.connect() as conn:
             total=conn.execute(select(func.count()).select_from(report_exports).where(*scope)).scalar_one()
@@ -201,6 +218,10 @@ def change_setting(data: SettingUpdate, principal: Principal = Depends(require_r
 
 @admin_router.get('/audit/export.csv')
 def audit_export(start_at: datetime | None = None, end_at: datetime | None = None,
+                 q: str = Query('', max_length=100),
+                 category: AuditCategory = Query('todos'),
+                 result: AuditResult = Query('todos'),
+                 start_date: date | None = None, end_date: date | None = None,
                  principal: Principal = Depends(require_roles('administrador','auditor')),
                  engine: Engine = Depends(get_read_engine)) -> Response:
     """CSV auditable de metadatos, sin JSON interno, correos ni secretos."""
@@ -209,18 +230,19 @@ def audit_export(start_at: datetime | None = None, end_at: datetime | None = Non
     if start_at and end_at and start_at > end_at:
         raise HTTPException(422,'Periodo invertido')
     cutoff=datetime.now(timezone.utc)
-    conditions=[audit_logs.c.occurred_at<=cutoff]
-    if start_at: conditions.append(audit_logs.c.occurred_at>=start_at)
-    if end_at: conditions.append(audit_logs.c.occurred_at<=end_at)
+    relation, actor, subject = audit_join()
+    conditions = audit_conditions(q, category, result, start_date, end_date, actor, subject)
+    conditions.append(audit_logs.c.occurred_at <= cutoff)
+    if start_at: conditions.append(audit_logs.c.occurred_at >= start_at)
+    if end_at: conditions.append(audit_logs.c.occurred_at <= end_at)
     try:
         with engine.begin() as conn:
-            count=conn.execute(select(func.count()).select_from(audit_logs).where(*conditions)).scalar_one()
+            count=conn.execute(select(func.count()).select_from(relation).where(*conditions)).scalar_one()
             if count > 5000:
                 raise HTTPException(413,'Limita el periodo: máximo 5000 entradas por exportación')
-            data=conn.execute(select(audit_logs.c.occurred_at, users.c.full_name,
+            data=conn.execute(select(audit_logs.c.occurred_at, actor.c.full_name,
                 audit_logs.c.action,audit_logs.c.entity_type,audit_logs.c.result,
-                audit_logs.c.correlation_id).select_from(audit_logs.outerjoin(
-                users,users.c.id==audit_logs.c.actor_id)).where(*conditions).order_by(
+                audit_logs.c.correlation_id).select_from(relation).where(*conditions).order_by(
                 audit_logs.c.occurred_at.desc(),audit_logs.c.id.desc())).all()
             buff=StringIO(newline='');writer=csv.writer(buff)
             writer.writerow(['fecha_utc','usuario','accion','entidad','resultado','correlacion'])
@@ -228,7 +250,10 @@ def audit_export(start_at: datetime | None = None, end_at: datetime | None = Non
             output=('\ufeff'+buff.getvalue()).encode('utf-8')
             conn.execute(audit_logs.insert().values(actor_id=principal.id,
                 action='audit.export.generated',entity_type='audit_logs',
-                after_json={'rows':len(data),'cutoff_utc':cutoff.isoformat()},result='success'))
+                after_json={'rows':len(data),'cutoff_utc':cutoff.isoformat(), 'filters': {
+                    'search_applied': bool(q.strip()), 'category': category, 'result': result,
+                    'start_date': str(start_date) if start_date else None,
+                    'end_date': str(end_date) if end_date else None}},result='success'))
     except HTTPException:
         raise
     except SQLAlchemyError:

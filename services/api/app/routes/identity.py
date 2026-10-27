@@ -5,7 +5,7 @@ Ningún endpoint permite elegir actor_id: se deriva del JWT validado y de la BD.
 from uuid import UUID
 import re
 from typing import Literal
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, SecretStr, ConfigDict
@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app.auth.security import Principal, ROLES, require_roles, require_user
 from app.db.session import get_read_engine
 from app.db.tables import users, audit_logs
+from app.audit.filters import AuditCategory, AuditResult, audit_join, audit_conditions, sanitized_json
 from app.core.config import settings
 from app.auth.provisioning import create_auth_identity, delete_created_identity, ProvisioningError
 
@@ -197,36 +198,50 @@ def edit_user(user_id: UUID, data: AccountUpdate,
 
 
 @router.get('/admin/audit')
-def list_audit(limit: int = Query(50, ge=1, le=200),
+def list_audit(page: int = Query(1, ge=1, le=100000),
+               page_size: int = Query(10, ge=5, le=20),
+               q: str = Query('', max_length=100),
+               category: AuditCategory = Query('todos'),
+               result: AuditResult = Query('todos'),
+               start_date: date | None = None, end_date: date | None = None,
+               # Compatibilidad con clientes antiguos que utilizaban ?limit=100.
+               limit: int | None = Query(None, ge=1, le=200),
                principal: Principal = Depends(require_roles('administrador', 'auditor')),
                engine: Engine = Depends(get_read_engine)) -> dict:
-    """Historial protegido: metadatos y cambios sin secretos ni direcciones privadas."""
+    """Historial desde PostgreSQL: búsqueda, filtros, contadores y paginación real."""
+    # FastAPI recibe los parámetros query como texto. Literal[int] no los convierte
+    # en Pydantic v2; int + validación explícita evita rechazar 5, 10 y 20.
+    if page_size not in (5, 10, 20):
+        raise HTTPException(422, "El tamaño de página debe ser 5, 10 o 20")
+    relation, actor, subject = audit_join()
+    conditions = audit_conditions(q, category, result, start_date, end_date, actor, subject)
+    effective_size = limit if limit is not None else page_size
     try:
-        # El ID de auditoría sigue disponible para soporte, pero la interfaz recibe
-        # nombres legibles. LEFT JOIN conserva las operaciones automáticas (actor NULL)
-        # y las entradas cuyo usuario haya dejado de existir.
-        actor = users.alias('audit_actor')
-        subject = users.alias('audit_subject')
-        relation = audit_logs.outerjoin(
-            actor, audit_logs.c.actor_id == actor.c.id,
-        ).outerjoin(
-            subject,
-            (audit_logs.c.entity_type == 'users') & (audit_logs.c.entity_id == subject.c.id),
-        )
         with engine.connect() as conn:
+            stats = conn.execute(select(
+                func.count().label('total'),
+                func.count().filter(audit_logs.c.result == 'success').label('correctos'),
+                func.count().filter(audit_logs.c.result.in_(('failed', 'failure', 'error'))).label('fallidos'),
+            ).select_from(relation).where(*conditions)).mappings().one()
             rows = conn.execute(select(
                 audit_logs.c.id, audit_logs.c.actor_id, audit_logs.c.action,
                 audit_logs.c.entity_type, audit_logs.c.entity_id,
                 audit_logs.c.before_json, audit_logs.c.after_json,
-                audit_logs.c.result, audit_logs.c.occurred_at,
-                actor.c.full_name.label('actor_name'),
-                actor.c.role.label('actor_role'),
+                audit_logs.c.result, audit_logs.c.correlation_id, audit_logs.c.occurred_at,
+                actor.c.full_name.label('actor_name'), actor.c.role.label('actor_role'),
                 subject.c.full_name.label('subject_name'),
-            ).select_from(relation).order_by(
+            ).select_from(relation).where(*conditions).order_by(
                 audit_logs.c.occurred_at.desc(), audit_logs.c.id.desc(),
-            ).limit(limit)).mappings().all()
-        # actor_role describe el rol ACTUAL; el esquema histórico no guarda
-        # instantáneas del rol que tenía el actor en el momento de la operación.
-        return {'items': [dict(row) for row in rows]}
+            ).limit(effective_size).offset((page - 1) * effective_size)).mappings().all()
+        items = []
+        for row in rows:
+            entry = dict(row)
+            entry['before_json'] = sanitized_json(entry['before_json'])
+            entry['after_json'] = sanitized_json(entry['after_json'])
+            items.append(entry)
+        return {'items': items, 'total': stats['total'], 'page': page,
+                'page_size': effective_size,
+                'pages': max(1, (stats['total'] + effective_size - 1) // effective_size),
+                'summary': {'correctos': stats['correctos'], 'fallidos': stats['fallidos']}}
     except SQLAlchemyError:
         raise HTTPException(503, 'Auditoría no disponible') from None

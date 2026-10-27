@@ -1,4 +1,5 @@
 /** Fase 6: lectura de experimentos históricos; sin botones de predicción. */
+import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, BrainCircuit, FlaskConical, RefreshCw, ShieldAlert } from 'lucide-react';
 import { getExperiments } from '../../services/ml';
@@ -42,7 +43,7 @@ export default function Page() {
       <div><h2 className="font-semibold text-main">Sin predicción ni alerta sísmica</h2>
       <p className="mt-1 text-sm text-muted">El modelo clasifica o ajusta medidas de eventos pasados. Los resultados no representan probabilidad de terremotos, riesgo futuro ni información oficial. La revisión científica sigue pendiente.</p></div>
     </section>
-    {loading && <p className="rounded-xl border border-border-ui bg-panel p-5 text-sm text-muted">Consultando los experimentos...</p>}
+    {loading && <div className="rounded-xl border border-border-ui bg-panel"><LoadingSpinner label="Consultando experimentos…" /></div>}
     {error && <p role="alert" className="rounded-xl border border-rose-500 p-4 text-sm text-rose-600 dark:text-rose-300">{error}. Verifica la migración 003 y Render.</p>}
     {!loading && !error && (result?.total ?? 0) === 0 && <section className="rounded-2xl border border-border-ui bg-panel p-8 text-center">
       <FlaskConical size={32} className="mx-auto text-accent"/>

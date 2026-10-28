@@ -1,4 +1,4 @@
-/** Contratos descriptivos: calidad de eventos observados y metadatos de datasets. */
+/** Contratos descriptivos del informe y copias inmutables IGP/CENSIS. */
 export interface QualityReport {
   checked_at: string;
   total: number;
@@ -12,6 +12,8 @@ export interface QualityReport {
   by_source: Record<string, number>;
   status: 'ok' | 'missing_values' | 'review';
   method: string;
+  by_split?: { train?: number; validation?: number };
+  essential_fields_missing?: number;
   duplicate_check?: string;
 }
 export interface DatasetMetadata {
@@ -21,7 +23,7 @@ export interface DatasetMetadata {
   row_count: number;
   content_sha256: string;
   created_at: string;
-  query_spec: Record<string, string | number | null>;
+  query_spec: Record<string, unknown>;
   quality_report: QualityReport;
 }
 export interface DatasetList {
@@ -29,4 +31,31 @@ export interface DatasetList {
   total: number;
   page: number;
   page_size: number;
+}
+export interface DatasetPreviewRow {
+  position: number;
+  external_id: string | null;
+  occurred_at: string | null;
+  magnitude: number | null;
+  depth_km: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  place: string | null;
+  source_name: string;
+  split?: 'train' | 'validation';
+}
+export interface DatasetPreview {
+  items: DatasetPreviewRow[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+export interface DatasetIntegrity {
+  id: string;
+  row_count: number;
+  row_count_matches: boolean;
+  hash_matches: boolean;
+  igp_only: boolean;
+  verified: boolean;
+  sha256: string;
 }

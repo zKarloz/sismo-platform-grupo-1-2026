@@ -1,7 +1,7 @@
-/** Cliente de solo lectura: ninguna credencial de Supabase llega a React. */
+/** Cliente IGP de calidad y snapshots: únicamente API propia, jamás Supabase desde React. */
 import { filterQuery } from './analytics';
 import type { AnalyticsFilters } from '../types/analytics';
-import type { DatasetList, QualityReport } from '../types/quality';
+import type { DatasetIntegrity, DatasetList, DatasetPreview, DatasetMetadata, QualityReport } from '../types/quality';
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
@@ -11,6 +11,18 @@ async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** La restricción IGP es obligatoria también en FastAPI, no solo en este cliente. */
 export const getQuality = (filters: AnalyticsFilters, signal?: AbortSignal) =>
-  request<QualityReport>(`data-quality/summary?${filterQuery(filters)}`, signal);
-export const getDatasets = (signal?: AbortSignal) => request<DatasetList>('datasets?page_size=50', signal);
+  request<QualityReport>(`data-quality/summary?${filterQuery({ ...filters, source: 'IGP/CENSIS' })}`, signal);
+
+export const getDatasets = (page = 1, pageSize = 5, signal?: AbortSignal) =>
+  request<DatasetList>(`datasets?page=${page}&page_size=${pageSize}`, signal);
+
+export const getDatasetQuality = (id: string, signal?: AbortSignal) =>
+  request<DatasetMetadata>(`datasets/${encodeURIComponent(id)}/quality`, signal);
+
+export const getDatasetPreview = (id: string, page = 1, pageSize = 5, signal?: AbortSignal) =>
+  request<DatasetPreview>(`datasets/${encodeURIComponent(id)}/preview?page=${page}&page_size=${pageSize}`, signal);
+
+export const getDatasetIntegrity = (id: string, signal?: AbortSignal) =>
+  request<DatasetIntegrity>(`datasets/${encodeURIComponent(id)}/integrity`, signal);

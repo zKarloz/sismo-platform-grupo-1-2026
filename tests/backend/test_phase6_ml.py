@@ -8,10 +8,10 @@ from sqlalchemy import create_engine, event as sa_event, select
 from sqlalchemy.pool import StaticPool
 
 from app.db.session import get_read_engine
-from app.db.tables import metadata, ml_experiments, events, sources, snapshot_rows
+from app.db.tables import metadata, ml_experiments, events, sources, snapshot_rows, datasets
 from app.main import app
 from app.ml.laboratory import CLASSES, experiment, magnitude_class, prepare
-from app.quality.service import create_dataset
+from app.quality.report import snapshot_record, quality_report, content_sha256
 from app.routes.filters import SeismicFilters
 
 
@@ -56,8 +56,24 @@ def populate(engine, count=150):
                 latitude=r['latitude'], longitude=r['longitude'],
                 magnitude=r['magnitude'], depth_km=r['depth_km'],
                 source_url=f'https://earthquake.usgs.gov/{i}', review_status='reviewed'))
-    return create_dataset(engine, name='peru_usgs_historico',
-                          filters=SeismicFilters(source='USGS', min_magnitude=2.5), max_rows=1000)
+    # Regresión de laboratorio antiguo USGS: recuperar un snapshot histórico
+    # mediante fixture en SQLite, SIN habilitar captura nueva de USGS en producción.
+    with engine.begin() as conn:
+        frozen = conn.execute(select(events, sources.c.name.label('source_name'))
+            .join(sources, events.c.source_id == sources.c.id)
+            .order_by(events.c.occurred_at, events.c.id)).mappings().all()
+        records = [snapshot_record(dict(row)) for row in frozen]
+        digest = content_sha256(records)
+        did = uuid4()
+        conn.execute(datasets.insert().values(id=did, name='peru_usgs_historico', version=1,
+            query_spec={'source': 'USGS'}, row_count=len(records),
+            quality_report=quality_report(records), content_sha256=digest,
+            created_at=datetime.now(timezone.utc)))
+        conn.execute(snapshot_rows.insert(), [
+            {'dataset_id': did, 'position': i, 'event_id': row['id'], 'record': rec}
+            for i, (row, rec) in enumerate(zip(frozen, records), 1)
+        ])
+    return {'id': str(did), 'content_sha256': digest, 'row_count': len(records)}
 
 
 def test_target_labels_and_strict_chronology():
@@ -150,8 +166,9 @@ def test_read_only_api(engine):
         experiment(engine, str(ds_id))
         response = client.get('/api/v1/ml/experiments?page_size=5')
         assert response.status_code == 200
-        assert response.json()['total'] == 5
-        assert len(response.json()['items']) == 5
+        # USGS legado sigue guardado, pero el endpoint público solo muestra IGP.
+        assert response.json()['total'] == 0
+        assert len(response.json()['items']) == 0
         assert 'No es predicción' in response.json()['disclaimer']
         assert client.get('/api/v1/ml/experiments?page_size=500').status_code == 422
     finally:

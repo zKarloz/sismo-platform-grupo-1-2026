@@ -1,5 +1,5 @@
 /** Rutas base: cada módulo vive en su carpeta para desarrollarse de forma aislada. */
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import AppLayout from './AppLayout';
 import {RequireRole, RequireSession} from '../auth/ProtectedRoute';
 import LoginPage from '../modules/login/LoginPage';
@@ -15,7 +15,6 @@ import FuentesPage from '../modules/fuentes-datos/Page';
 import ReportesPage from '../modules/reportes/Page';
 import UsuariosPage from '../modules/usuarios-roles/Page';
 import AuditoriaPage from '../modules/auditoria/Page';
-import HistoricoIGPPage from '../modules/historico-igp/Page';
 
 export const router = createBrowserRouter([{ path: '/login', element: <LoginPage /> },
   { path: '/establecer-clave', element: <SetPasswordPage /> }, {
@@ -23,7 +22,9 @@ export const router = createBrowserRouter([{ path: '/login', element: <LoginPage
   children: [
     { index: true, element: <DashboardPage /> },
     { path: 'eventos', element: <EventosPage /> },
-    { path: 'historico-igp', element: <HistoricoIGPPage /> },
+    { path: 'eventos/historico', element: <EventosPage /> },
+    // Mantener los enlaces históricos guardados, sin duplicar una entrada en el menú.
+    { path: 'historico-igp', element: <Navigate to="/eventos/historico" replace /> },
     { path: 'mapa-sismico', element: <MapaPage /> },
     { path: 'analisis', element: <AnalisisPage /> },
     { path: 'calidad-datos', element: <CalidadPage /> },

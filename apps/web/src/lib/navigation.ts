@@ -1,13 +1,12 @@
 /** Catálogo único de módulos de navegación, compartido por sidebar y UX. */
 import type { LucideIcon } from 'lucide-react';
-import { Archive, Activity, Bell, ChartNoAxesCombined, ShieldCheck, ClipboardList, Database, FileBarChart, History, LayoutDashboard, MapPinned, UsersRound } from 'lucide-react';
+import { Activity, Bell, ChartNoAxesCombined, ShieldCheck, ClipboardList, Database, FileBarChart, History, LayoutDashboard, MapPinned, UsersRound } from 'lucide-react';
 
 export type NavItem = { label: string; path: string; icon: LucideIcon; section: 'general' | 'gestion' };
 
 export const navigation: NavItem[] = [
   { label: 'Dashboard', path: '/', icon: LayoutDashboard, section: 'general' },
   { label: 'Eventos sísmicos', path: '/eventos', icon: Activity, section: 'general' },
-  { label: 'IGP histórico 1960–2025', path: '/historico-igp', icon: Archive, section: 'general' },
   { label: 'Mapa sísmico', path: '/mapa-sismico', icon: MapPinned, section: 'general' },
   { label: 'Análisis histórico', path: '/analisis', icon: ChartNoAxesCombined, section: 'general' },
   { label: 'Calidad y datasets', path: '/calidad-datos', icon: ShieldCheck, section: 'general' },

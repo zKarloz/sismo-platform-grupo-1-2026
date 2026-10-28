@@ -4,6 +4,7 @@ Los indicadores no son pronósticos ni mediciones de peligrosidad. Una fuente
 solo incluye registros sincronizados a PostgreSQL, nunca el universo completo.
 """
 
+from dataclasses import replace
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -126,10 +127,18 @@ def dashboard_operations(engine: Engine = Depends(get_read_engine)) -> dict:
     }
 
 
+def get_igp_analytics_filters(filters: SeismicFilters = Depends(get_filters)) -> SeismicFilters:
+    """Analítica pública limitada a IGP/CENSIS, incluso si el cliente pide otra fuente.
+
+    No se cambia get_filters global porque existen otras rutas y pruebas que lo usan.
+    """
+    return replace(filters, source="IGP/CENSIS")
+
+
 @analytics_router.get("/timeseries")
 def timeseries(
     interval: str = Query("day", pattern="^(day|month)$"),
-    filters: SeismicFilters = Depends(get_filters),
+    filters: SeismicFilters = Depends(get_igp_analytics_filters),
     engine: Engine = Depends(get_read_engine),
 ) -> dict:
     """Agrupa en UTC por día o mes; no rellena periodos sin eventos."""
@@ -165,7 +174,7 @@ BUCKETS = (
 
 @analytics_router.get("/magnitudes")
 def magnitudes(
-    filters: SeismicFilters = Depends(get_filters), engine: Engine = Depends(get_read_engine),
+    filters: SeismicFilters = Depends(get_igp_analytics_filters), engine: Engine = Depends(get_read_engine),
 ) -> dict:
     """Distribución por rangos no equivalentes a una escala de alerta."""
     magnitude = events.c.magnitude
@@ -190,7 +199,7 @@ def magnitudes(
 @analytics_router.get("/depth-vs-magnitude")
 def depth_vs_magnitude(
     limit: int = Query(500, ge=1, le=1000),
-    filters: SeismicFilters = Depends(get_filters), engine: Engine = Depends(get_read_engine),
+    filters: SeismicFilters = Depends(get_igp_analytics_filters), engine: Engine = Depends(get_read_engine),
 ) -> dict:
     """Hasta 1 000 registros más recientes con ambas medidas disponibles.
 

@@ -7,6 +7,12 @@ type Props = {
   sampleSize?: number | null;
   geoDescription?: string;
   lastSync?: string | null;
+  /** Metadatos opcionales para Análisis histórico; Dashboard permanece compatible. */
+  populationSize?: number | null;
+  missingCount?: number | null;
+  sampleNote?: string;
+  executedAt?: string | null;
+  showLastSync?: boolean;
 };
 
 function dateLabel(value: string | undefined) { return value ? value.slice(0, 10).split('-').reverse().join('/') : 'Sin límite'; }
@@ -25,7 +31,7 @@ function datetime(value?: string | null) {
   return Number.isNaN(ms) ? 'No disponible' : new Date(ms).toLocaleString('es-PE', { timeZone: 'America/Lima', dateStyle: 'short', timeStyle: 'short' });
 }
 
-export default function AppliedFiltersAside({ filters, sampleSize, lastSync, geoDescription }: Props) {
+export default function AppliedFiltersAside({ filters, sampleSize, lastSync, geoDescription, populationSize, missingCount, sampleNote, executedAt, showLastSync = true }: Props) {
   return <aside aria-label="Contexto y filtros de la visualización" className="min-w-0 rounded-2xl border border-border-ui bg-panel p-4 xl:w-[244px] xl:shrink-0">
     <div className="flex items-center gap-2 text-sm font-semibold text-main"><SlidersHorizontal size={16} className="text-accent"/> Filtros aplicados</div>
     <dl className="mt-4 space-y-4 text-sm">
@@ -37,8 +43,11 @@ export default function AppliedFiltersAside({ filters, sampleSize, lastSync, geo
     </dl>
     <div className="mt-4 border-t border-border-ui pt-4 text-xs text-muted">
       <p>Tamaño de la muestra: <strong className="text-main">{sampleSize == null ? '—' : sampleSize.toLocaleString('es-PE')}</strong></p>
-      <p className="mt-2">Última ingesta IGP:</p>
-      <p className="mt-1 font-medium text-main">{datetime(lastSync)}</p>
+      {populationSize !== undefined && <p className="mt-2">Conjunto filtrado: <strong className="text-main">{populationSize == null ? '—' : populationSize.toLocaleString('es-PE')}</strong></p>}
+      {missingCount !== undefined && <p className="mt-2">Datos faltantes para esta visualización: <strong className="text-main">{missingCount == null ? '—' : missingCount.toLocaleString('es-PE')}</strong></p>}
+      {sampleNote && <p className="mt-2 text-soft">{sampleNote}</p>}
+      {executedAt !== undefined && <><p className="mt-2">Consulta ejecutada (Perú):</p><p className="mt-1 font-medium text-main">{datetime(executedAt)}</p></>}
+      {showLastSync && <><p className="mt-2">Última ingesta IGP:</p><p className="mt-1 font-medium text-main">{datetime(lastSync)}</p></>}
       <p className="mt-2 text-soft">El catálogo almacenado no equivale a la totalidad de sismos publicados por el IGP.</p>
     </div>
   </aside>;

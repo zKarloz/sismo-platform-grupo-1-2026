@@ -7,6 +7,8 @@ export interface AnalyticsFilters {
   min_depth?: number;
   max_depth?: number;
   source?: string;
+  /** Departamento indicado expresamente en el texto de ubicación del reporte IGP. */
+  reported_department?: string;
   /** Rectángulo geográfico WGS84, completo o ausente. */
   min_lat?: number;
   max_lat?: number;

@@ -1,6 +1,7 @@
 /** Catálogo oficial instrumental 1960–2025: consulta autenticada, sin Supabase. */
 import { apiAuthed } from '../auth/api';
 import { authClient } from '../auth/client';
+import type { TablePageSize } from '../components/ui/TablePagination';
 
 const API = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
 export type HistoryFilters = {
@@ -18,12 +19,18 @@ export type HistoryProvenance = {name:string; resource_url:string; published_at:
   original_csv_sha256?:string|null;original_xlsx_sha256?:string|null};
 export type HistoryPage = {items:HistoryEvent[];total:number;page:number;pages:number;source:HistoryProvenance};
 
-export function readHistory(filters:HistoryFilters,page:number,signal?:AbortSignal):Promise<HistoryPage>{
-  const params=new URLSearchParams({page:String(page),page_size:'20'});
+// Compatibilidad: los clientes antiguos pasan signal como tercer argumento.
+// Las nuevas tablas indican explícitamente 5/10/20 registros por página.
+export function readHistory(filters:HistoryFilters,page:number,signal?:AbortSignal):Promise<HistoryPage>;
+export function readHistory(filters:HistoryFilters,page:number,pageSize:TablePageSize,signal?:AbortSignal):Promise<HistoryPage>;
+export function readHistory(filters:HistoryFilters,page:number,pageSizeOrSignal:TablePageSize|AbortSignal=20,signal?:AbortSignal):Promise<HistoryPage>{
+  const pageSize=typeof pageSizeOrSignal==='number'?pageSizeOrSignal:20;
+  const requestSignal=typeof pageSizeOrSignal==='number'?signal:pageSizeOrSignal;
+  const params=new URLSearchParams({page:String(page),page_size:String(pageSize)});
   Object.entries(filters).forEach(([key,value])=>{
     if(value!==undefined)params.set(key,String(value));
   });
-  return apiAuthed<HistoryPage>(`/api/v1/igp-history/events?${params.toString()}`,{signal});
+  return apiAuthed<HistoryPage>(`/api/v1/igp-history/events?${params.toString()}`,{signal:requestSignal});
 }
 
 export async function exportHistory(filters:HistoryFilters,format:'csv'|'xlsx'|'pdf'){

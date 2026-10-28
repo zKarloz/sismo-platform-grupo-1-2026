@@ -25,13 +25,13 @@ def engine():
     metadata.create_all(db)
     sid = uuid4()
     with db.begin() as conn:
-        conn.execute(sources.insert().values(id=sid, name="USGS", organization="USGS",
-                                            base_url="https://earthquake.usgs.gov", source_type="api", status="active"))
+        conn.execute(sources.insert().values(id=sid, name="IGP/CENSIS", organization="IGP/CENSIS",
+                                            base_url="https://ultimosismo.igp.gob.pe", source_type="api", status="active"))
         for i, mag, depth in [(1, 4.2, 35), (2, None, 20), (3, 3.1, None)]:
             conn.execute(events.insert().values(
-                id=uuid4(), source_id=sid, external_id=f"us{i}", occurred_at=datetime(2026, 10, i, tzinfo=timezone.utc),
+                id=uuid4(), source_id=sid, external_id=f"igp{i}", occurred_at=datetime(2026, 10, i, tzinfo=timezone.utc),
                 latitude=-15 + i, longitude=-72, magnitude=mag, depth_km=depth, place="Perú",
-                source_url=f"https://earthquake.usgs.gov/earthquakes/eventpage/us{i}",
+                source_url=f"https://ultimosismo.igp.gob.pe/evento/igp{i}",
                 review_status="reviewed", magnitude_type="mwr",
             ))
     yield db
@@ -77,7 +77,7 @@ def test_live_quality_and_filter(client):
     assert report['missing']['depth_km'] == 1
     assert report['complete_magnitude_depth'] == 1
     assert report['duplicates_within_source'] == 0
-    assert report['by_source'] == {'USGS': 3}
+    assert report['by_source'] == {'IGP/CENSIS': 3}
     partial = client.get('/api/v1/data-quality/summary?min_magnitude=4').json()
     assert partial['total'] == 1
     assert client.get('/api/v1/data-quality/summary?start_time=2026-10-01T00:00:00').status_code == 422
@@ -85,7 +85,7 @@ def test_live_quality_and_filter(client):
 
 def test_dataset_lifecycle_and_immutable_snapshot(engine, client):
     assert client.get('/api/v1/datasets').json()['total'] == 0
-    result = create_dataset(engine, name='peru_usgs', filters=SeismicFilters(source='USGS'), max_rows=3)
+    result = create_dataset(engine, name='peru_igp', filters=SeismicFilters(source='IGP/CENSIS'), max_rows=3)
     assert result['version'] == 1 and result['row_count'] == 3
     assert result['quality_report']['missing']['magnitude'] == 1
     assert verify_dataset(engine, result['id'])['hash_matches']
@@ -97,12 +97,12 @@ def test_dataset_lifecycle_and_immutable_snapshot(engine, client):
     assert detail.status_code == 200 and detail.json()['row_count'] == 3
 
     with engine.begin() as conn:
-        event_id = conn.execute(select(events.c.id).where(events.c.external_id == 'us1')).scalar_one()
+        event_id = conn.execute(select(events.c.id).where(events.c.external_id == 'igp1')).scalar_one()
         conn.execute(events.update().where(events.c.id == event_id).values(magnitude=5.3))
         frozen = conn.execute(select(snapshot_rows.c.record).where(snapshot_rows.c.event_id == event_id)).scalar_one()
     assert frozen['magnitude'] == 4.2  # revisión de origen no altera v1
     assert verify_dataset(engine, result['id'])['hash_matches']
-    next_version = create_dataset(engine, name='peru_usgs', filters=SeismicFilters(), max_rows=3)
+    next_version = create_dataset(engine, name='peru_igp', filters=SeismicFilters(), max_rows=3)
     assert next_version['version'] == 2 and next_version['content_sha256'] != result['content_sha256']
     assert client.get('/api/v1/datasets').json()['total'] == 2
     assert client.get('/api/v1/datasets/00000000-0000-0000-0000-000000000000/quality').status_code == 404
@@ -111,10 +111,12 @@ def test_dataset_lifecycle_and_immutable_snapshot(engine, client):
 
 def test_dataset_refuses_truncation_and_empty_and_bad_inputs(engine, client):
     with pytest.raises(ValueError, match='aumenta --max-rows'):
-        create_dataset(engine, name='peru_usgs', filters=SeismicFilters(), max_rows=2)
+        create_dataset(engine, name='peru_igp', filters=SeismicFilters(), max_rows=2)
     assert client.get('/api/v1/datasets').json()['total'] == 0
     with pytest.raises(ValueError, match='No hay eventos'):
-        create_dataset(engine, name='peru_usgs', filters=SeismicFilters(source='IGP'))
+        create_dataset(engine, name='peru_igp', filters=SeismicFilters(min_magnitude=11))
+    with pytest.raises(ValueError, match='IGP/CENSIS'):
+        create_dataset(engine, name='peru_igp', filters=SeismicFilters(source='USGS'))
     with pytest.raises(ValueError, match='Nombre'):
         create_dataset(engine, name='nombre con espacios', filters=SeismicFilters())
     with pytest.raises(ValueError, match='max_rows'):
@@ -122,7 +124,7 @@ def test_dataset_refuses_truncation_and_empty_and_bad_inputs(engine, client):
 
 
 def test_hash_reproduces_and_detects_tamper(engine):
-    result = create_dataset(engine, name='peru_usgs', filters=SeismicFilters())
+    result = create_dataset(engine, name='peru_igp', filters=SeismicFilters())
     assert verify_dataset(engine, result['id'])['hash_matches']
     # Solo prueba de manipulación en SQLite, donde no está el trigger de PG.
     with engine.begin() as conn:

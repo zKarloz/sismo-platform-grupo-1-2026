@@ -1,7 +1,7 @@
 """Crea snapshots históricos desde Git Bash; no es una operación HTTP pública.
 
 Ejemplo:
- python -m app.commands.create_dataset --name peru_usgs_v2 --source USGS --min-magnitude 2.5
+ python -m app.commands.create_dataset --name peru_igp --source IGP/CENSIS --min-magnitude 2.5
 """
 
 import argparse
@@ -24,7 +24,7 @@ def parse_datetime(raw: str | None):
 def main():
     parser = argparse.ArgumentParser(description="Congelar datos observados de Supabase en una versión inmutable")
     parser.add_argument("--name", required=True, help="Identificador ASCII sin espacios, p.ej. peru_usgs")
-    parser.add_argument("--source", help="Nombre exacto, p.ej. USGS")
+    parser.add_argument("--source", default="IGP/CENSIS", help="Fuente obligatoria: IGP/CENSIS")
     parser.add_argument("--start", help="Instante ISO 8601 con offset")
     parser.add_argument("--end", help="Instante ISO 8601 con offset")
     parser.add_argument("--min-magnitude", type=float)

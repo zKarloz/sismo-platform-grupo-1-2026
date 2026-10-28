@@ -9,9 +9,28 @@ from datetime import datetime
 from math import cos, pi, sin
 
 from fastapi import HTTPException, Query
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app.db.tables import events, sources
+
+# Catálogo cerrado: jamás interpolar nombres arbitrarios en la cláusula LIKE.
+# La descripción IGP puede nombrar el departamento de referencia de un sismo
+# mar adentro. No equivale a asignar un epicentro a un polígono administrativo.
+REPORTED_DEPARTMENTS = {
+    "AMAZONAS": ("amazonas",), "ANCASH": ("ancash", "áncash"),
+    "APURIMAC": ("apurimac", "apurímac"), "AREQUIPA": ("arequipa",),
+    "AYACUCHO": ("ayacucho",), "CAJAMARCA": ("cajamarca",),
+    "CALLAO": ("callao",), "CUSCO": ("cusco",),
+    "HUANCAVELICA": ("huancavelica",), "HUANUCO": ("huanuco", "huánuco"),
+    "ICA": ("ica",), "JUNIN": ("junin", "junín"),
+    "LA LIBERTAD": ("la libertad",), "LAMBAYEQUE": ("lambayeque",),
+    "LIMA": ("lima",), "LORETO": ("loreto",),
+    "MADRE DE DIOS": ("madre de dios",), "MOQUEGUA": ("moquegua",),
+    "PASCO": ("pasco",), "PIURA": ("piura",), "PUNO": ("puno",),
+    "SAN MARTIN": ("san martin", "san martín"),
+    "TACNA": ("tacna",), "TUMBES": ("tumbes",),
+    "UCAYALI": ("ucayali",),
+}
 
 
 @dataclass(frozen=True)
@@ -30,6 +49,7 @@ class SeismicFilters:
     center_lat: float | None = None
     center_lon: float | None = None
     radius_km: float | None = None
+    reported_department: str | None = None
 
     def conditions(self) -> list:
         """Aplicar idéntico recorte a KPI, gráfico, mapa y consultas analíticas."""
@@ -61,6 +81,15 @@ class SeismicFilters:
                  * func.cos(events.c.latitude * radians) * sin_lon * sin_lon)
             limit = sin(self.radius_km / (2 * 6371.0088)) ** 2
             conditions.append(a <= limit)
+        if self.reported_department:
+            # Etiqueta final explícita: «... - Tumbes» o «... , Tumbes».
+            # No adivinar departamento a partir de nombres de localidades.
+            place = func.lower(func.trim(events.c.place))
+            names = REPORTED_DEPARTMENTS[self.reported_department]
+            conditions.append(or_(*(
+                place.like(f"% - {name}") | place.like(f"%, {name}")
+                for name in names
+            )))
         if self.source:
             conditions.append(func.lower(sources.c.name) == self.source.lower())
         return conditions
@@ -81,6 +110,7 @@ def get_filters(
     center_lat: float | None = Query(None, ge=-90, le=90),
     center_lon: float | None = Query(None, ge=-180, le=180),
     radius_km: float | None = Query(None, ge=1, le=2000),
+    reported_department: str | None = Query(None, max_length=30),
 ) -> SeismicFilters:
     """Validar fechas, rangos y obligatoriedad del cuadro geográfico completo."""
     for value in (start_time, end_time):
@@ -103,8 +133,10 @@ def get_filters(
         raise HTTPException(422, 'El filtro circular requiere latitud, longitud y radio')
     if any(value is not None for value in radial) and any(value is not None for value in geo):
         raise HTTPException(422, 'Selecciona rectángulo o radio; no ambos')
+    if reported_department is not None and reported_department not in REPORTED_DEPARTMENTS:
+        raise HTTPException(422, 'Departamento no válido')
     return SeismicFilters(
         start_time, end_time, min_magnitude, max_magnitude, min_depth,
         max_depth, source, min_lat, max_lat, min_lon, max_lon,
-        center_lat, center_lon, radius_km,
+        center_lat, center_lon, radius_km, reported_department,
     )

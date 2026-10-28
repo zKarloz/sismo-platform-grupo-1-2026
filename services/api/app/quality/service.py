@@ -12,6 +12,7 @@ from sqlalchemy.engine import Engine
 
 from app.db.tables import datasets, events, snapshot_rows, sources
 from app.quality.report import content_sha256, quality_report, snapshot_record
+from app.quality.source import IGP_SOURCE, require_igp_source
 from app.routes.filters import SeismicFilters
 
 MAX_DATASET_ROWS = 5000
@@ -27,8 +28,10 @@ def create_dataset(engine: Engine, *, name: str, filters: SeismicFilters,
         raise ValueError("Nombre: 3–64 caracteres ASCII [A-Za-z0-9_-]")
     if not 1 <= max_rows <= MAX_DATASET_ROWS:
         raise ValueError(f"max_rows debe estar entre 1 y {MAX_DATASET_ROWS}")
+    # Fuente obligatoria en el servidor, incluso si el CLI omite --source.
+    require_igp_source(filters.source)
     base = events.join(sources, events.c.source_id == sources.c.id)
-    conditions = filters.conditions()
+    conditions = [*filters.conditions(), func.lower(sources.c.name) == IGP_SOURCE.casefold()]
     with engine.begin() as conn:
         # Serializa versiones por nombre en PostgreSQL. SQLite solo se usa en pruebas.
         if conn.dialect.name == "postgresql":
@@ -58,7 +61,7 @@ def create_dataset(engine: Engine, *, name: str, filters: SeismicFilters,
             "end_time": filters.end_time.isoformat() if filters.end_time else None,
             "min_magnitude": filters.min_magnitude, "max_magnitude": filters.max_magnitude,
             "min_depth": filters.min_depth, "max_depth": filters.max_depth,
-            "source": filters.source, "max_rows": max_rows,
+            "source": IGP_SOURCE, "max_rows": max_rows,
             "order": "occurred_at ASC, id ASC", "source_table": "public.seismic_events",
             "capture_mode": "full_filtered_snapshot", "timezone": "UTC",
         }

@@ -16,5 +16,4 @@
 *.log
 .DS_Store
 .vscode/settings.json
-*.zip
 /*.zip

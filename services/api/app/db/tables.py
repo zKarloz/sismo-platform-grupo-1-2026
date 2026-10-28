@@ -88,6 +88,18 @@ snapshot_rows = Table(
     UniqueConstraint("dataset_id", "event_id", name="dataset_snapshots_dataset_event_uq"),
 )
 
+# Captura IGP instrumental: filas históricas independientes de seismic_events.
+# La tabla operativa sigue intacta; requiere migración IGP_HISTORICO_DATASETS_01.sql.
+historical_snapshot_rows = Table(
+    "igp_historical_dataset_snapshots", metadata,
+    Column("dataset_id", Uuid(as_uuid=True), ForeignKey("public.datasets.id"), primary_key=True),
+    Column("position", Integer, primary_key=True),
+    Column("source_row", Integer, nullable=False),
+    Column("split", Text, nullable=False),
+    Column("record", JSON, nullable=False),
+    UniqueConstraint("dataset_id", "source_row", name="igp_history_dataset_source_row_uq"),
+)
+
 # Fase 6: tabla append-only de experimentos retrospectivos (migración 003).
 ml_experiments = Table(
     "ml_experiments", metadata,

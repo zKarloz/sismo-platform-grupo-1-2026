@@ -24,6 +24,12 @@ def list_events(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     min_magnitude: float | None = Query(None, ge=-3, le=12),
+    min_depth: float | None = Query(None, ge=0, le=900),
+    max_depth: float | None = Query(None, ge=0, le=900),
+    south: float | None = Query(None, ge=-90, le=90),
+    west: float | None = Query(None, ge=-180, le=180),
+    north: float | None = Query(None, ge=-90, le=90),
+    east: float | None = Query(None, ge=-180, le=180),
     start_time: datetime | None = None,
     end_time: datetime | None = None,
     source: str | None = Query(None, max_length=40),
@@ -34,10 +40,23 @@ def list_events(
         raise HTTPException(status_code=422, detail="Las fechas necesitan zona horaria (ejemplo: +00:00)")
     if start_time and end_time and start_time > end_time:
         raise HTTPException(status_code=422, detail="Rango de fechas inválido")
+    if min_depth is not None and max_depth is not None and min_depth > max_depth:
+        raise HTTPException(status_code=422, detail="Rango de profundidad inválido")
+    area = (south, west, north, east)
+    if any(value is not None for value in area):
+        if any(value is None for value in area) or south > north or west > east:
+            raise HTTPException(status_code=422, detail="Zona incompleta o invertida")
     base = events.join(sources, events.c.source_id == sources.c.id)
     conditions = []
     if min_magnitude is not None:
         conditions.append(events.c.magnitude >= min_magnitude)
+    if min_depth is not None:
+        conditions.append(events.c.depth_km >= min_depth)
+    if max_depth is not None:
+        conditions.append(events.c.depth_km <= max_depth)
+    if south is not None:
+        conditions.extend((events.c.latitude >= south, events.c.latitude <= north,
+                           events.c.longitude >= west, events.c.longitude <= east))
     if start_time is not None:
         conditions.append(events.c.occurred_at >= start_time)
     if end_time is not None:
@@ -64,7 +83,7 @@ def list_events(
 
 @router.get("/{event_id}")
 def event_detail(event_id: UUID, engine: Engine = Depends(get_read_engine)) -> dict:
-    """Obtiene un evento por UUID interno con su procedencia USGS."""
+    """Obtiene un evento por UUID interno con su procedencia original."""
     try:
         with engine.connect() as connection:
             result = connection.execute(

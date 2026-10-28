@@ -25,7 +25,7 @@ def client():
     sid = uuid4()
     base = dict(source_id=sid, magnitude_type="mwr", review_status="reviewed")
     with engine.begin() as conn:
-        conn.execute(sources.insert().values(id=sid, name="USGS", organization="USGS", base_url="https://earthquake.usgs.gov", source_type="api", status="active"))
+        conn.execute(sources.insert().values(id=sid, name="IGP/CENSIS", organization="IGP", base_url="https://ultimosismo.igp.gob.pe", source_type="api", status="active"))
         for i, mag, depth, when, place in [
             (1, 2.6, 10, "2026-10-01T10:00:00+00:00", "Camaná"),
             (2, 4.2, 35, "2026-10-01T12:00:00+00:00", "Arequipa"),
@@ -33,9 +33,9 @@ def client():
             (4, None, 12, "2026-09-20T12:00:00+00:00", "=HYPERLINK(\"test\")"),
         ]:
             conn.execute(events.insert().values(
-                **base, id=uuid4(), external_id=f"us{i}", occurred_at=datetime.fromisoformat(when),
+                **base, id=uuid4(), external_id=f"igp{i}", occurred_at=datetime.fromisoformat(when),
                 latitude=-15+i, longitude=-75-i, magnitude=mag, depth_km=depth, place=place,
-                source_url=f"https://earthquake.usgs.gov/earthquakes/eventpage/us{i}",
+                source_url=f"https://ultimosismo.igp.gob.pe/evento/igp{i}",
             ))
     app.dependency_overrides[get_read_engine] = lambda: engine
     try:
@@ -52,7 +52,8 @@ def test_summary_and_filters(client):
     assert summary["with_depth"] == 3
     assert summary["with_magnitude"] == 3
     assert client.get("/api/v1/dashboard/summary?min_magnitude=4").json()["total"] == 2
-    assert client.get("/api/v1/dashboard/summary?source=IGP").json()["total"] == 0
+    assert client.get("/api/v1/dashboard/summary?source=IGP/CENSIS").json()["total"] == 4
+    assert client.get("/api/v1/dashboard/summary?source=USGS").json()["total"] == 0
 
 
 def test_timeseries_and_histogram(client):
@@ -84,3 +85,28 @@ def test_validations_and_csv(client):
     response = client.get("/api/v1/analytics/export.csv")
     # Fase 8: los volcados CSV ya requieren identidad y un rol exportador.
     assert response.status_code == 401
+
+
+def test_analitica_igp_no_admite_otras_fuentes(client):
+    """Una fuente USGS adicional nunca debe contaminar los gráficos IGP."""
+    engine = client.app.dependency_overrides[get_read_engine]()
+    sid = uuid4()
+    with engine.begin() as conn:
+        conn.execute(sources.insert().values(
+            id=sid, name="USGS", organization="USGS",
+            base_url="https://earthquake.usgs.gov", source_type="api", status="active",
+        ))
+        conn.execute(events.insert().values(
+            id=uuid4(), source_id=sid, external_id="usgs-test-1",
+            occurred_at=datetime.fromisoformat("2026-10-03T12:00:00+00:00"),
+            latitude=-12.0, longitude=-77.0, magnitude=7.2, depth_km=70,
+            review_status="reviewed", source_url="https://earthquake.usgs.gov",
+        ))
+
+    # El cliente no puede desactivar la restricción del backend enviando USGS.
+    for suffix in ("", "?source=USGS"):
+        assert client.get(f"/api/v1/analytics/timeseries{suffix}").json()["total"] == 4
+        assert client.get(f"/api/v1/analytics/magnitudes{suffix}").json()["total"] == 4
+        scatter = client.get(f"/api/v1/analytics/depth-vs-magnitude{suffix}").json()
+        assert scatter["total"] == 2
+        assert all(row["magnitude"] != 7.2 for row in scatter["items"])

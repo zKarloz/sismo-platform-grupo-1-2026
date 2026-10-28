@@ -92,8 +92,7 @@ export default function DashboardPage() {
   return <div className="space-y-5">
     <header className="flex flex-wrap items-end justify-between gap-4">
       <div className="max-w-2xl">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-accent">IGP/CENSIS · Datos observados</p>
-        <h1 className="mt-1 text-3xl font-bold text-main">Dashboard sísmico</h1>
+        <h1 className="text-3xl font-bold text-main">Dashboard sísmico</h1>
         <p className="mt-1 text-sm text-muted">Estado ejecutivo del catálogo IGP sincronizado y sus conectores. No ofrece predicciones ni alerta temprana.</p>
       </div>
       <FilterBar currentMonthDefault />
@@ -138,7 +137,7 @@ export default function DashboardPage() {
           <h2 className="font-semibold text-main">Últimos reportes del IGP</h2>
           <button type="button" onClick={() => { igpLatest.refresh(); igpRecent.refresh(); }} disabled={igpLatest.loading || igpRecent.loading}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border-ui px-2.5 py-1.5 text-xs text-main hover:bg-panel-alt disabled:opacity-50">
-            <RefreshCw size={13}/> Actualizar
+            <RefreshCw size={13} /> Actualizar
           </button>
         </div>
         <p className="mt-1 text-xs text-muted">Muestra en vivo; no se suma a los indicadores del catálogo.
@@ -156,11 +155,11 @@ export default function DashboardPage() {
             </Link>
           </li>)}
         </ul> : !igpRecent.loading && <p className="mt-5 text-sm text-muted">Sin reportes disponibles en esta consulta.</p>}
-        <a href={IGP_OFFICIAL_URL} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline">Consultar fuente oficial <ArrowUpRight size={13}/></a>
+        <a href={IGP_OFFICIAL_URL} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline">Consultar fuente oficial <ArrowUpRight size={13} /></a>
       </article>
 
       <article className="rounded-2xl border border-border-ui bg-panel p-4 sm:p-5">
-        <h2 className="flex items-center gap-2 font-semibold text-main"><Database size={16} className="text-accent"/> Estado de conectores IGP</h2>
+        <h2 className="flex items-center gap-2 font-semibold text-main"><Database size={16} className="text-accent" /> Estado de conectores IGP</h2>
         <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
           <div><dt className="text-xs text-muted">Última ingesta correcta</dt><dd className="mt-1 font-medium text-main">{lastSync ? peruDate(lastSync, true) : 'No disponible'}</dd></div>
           <div><dt className="text-xs text-muted">Estado de conector</dt><dd className="mt-1 font-medium text-main">{operations?.connector_status ?? sources[0]?.status ?? 'No disponible'}</dd></div>

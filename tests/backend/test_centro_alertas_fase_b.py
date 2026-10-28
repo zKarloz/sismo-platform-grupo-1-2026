@@ -105,3 +105,37 @@ def test_pagination_filters_and_validation(seeded):
     assert empty.status_code == 200 and empty.json()['total'] == 0
     for params in ('page=0', 'page_size=21', 'channel=other', 'status=approved'):
         assert client.get('/api/v1/alert-deliveries?' + params).status_code == 422
+
+
+def test_expired_and_cancelled_filters_are_distinct(seeded):
+    """Una caducidad automática no debe mezclarse con una cancelación manual."""
+    from sqlalchemy import select
+
+    with seeded.begin() as conn:
+        igp_alert_id = conn.execute(
+            select(alerts.c.id)
+            .join(events, alerts.c.event_id == events.c.id)
+            .join(sources, events.c.source_id == sources.c.id)
+            .where(sources.c.name == 'IGP/CENSIS')
+        ).scalar_one()
+        conn.execute(deliveries.insert().values(
+            id=uuid4(), alert_id=igp_alert_id, channel='email',
+            destination_ref='caducado@example.com', status='cancelled',
+            error_code='EVENT_TOO_OLD', attempts=0, created_at=NOW))
+        conn.execute(deliveries.insert().values(
+            id=uuid4(), alert_id=igp_alert_id, channel='email',
+            destination_ref='cancelado@example.com', status='cancelled',
+            error_code=None, attempts=0, created_at=NOW))
+
+    app.dependency_overrides[require_user] = lambda: actor('auditor')
+    client = TestClient(app)
+    expired = client.get('/api/v1/alert-deliveries?status=expired')
+    cancelled = client.get('/api/v1/alert-deliveries?status=cancelled')
+    assert expired.status_code == 200 and cancelled.status_code == 200
+    assert expired.json()['total'] == 1
+    assert expired.json()['items'][0]['error_code'] == 'EVENT_TOO_OLD'
+    assert cancelled.json()['total'] == 1
+    assert cancelled.json()['items'][0]['error_code'] is None
+    assert client.get('/api/v1/alert-deliveries?status=expired&channel=in_app').json()['total'] == 0
+    assert 'caducado@example.com' not in expired.text
+    assert 'cancelado@example.com' not in cancelled.text

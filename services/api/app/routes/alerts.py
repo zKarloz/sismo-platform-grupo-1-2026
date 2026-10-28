@@ -4,7 +4,7 @@ Los envíos personales usan endpoints independientes bajo /me/notifications.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -106,7 +106,7 @@ def _delivery_destination(channel: str, destination: str | None) -> str:
 def list_alert_deliveries(
     page: int = Query(1, ge=1),
     page_size: int = Query(5, ge=1, le=20),
-    status: str | None = Query(None, pattern='^(pending|sent|failed|cancelled)$'),
+    status: str | None = Query(None, pattern='^(pending|sent|failed|cancelled|expired)$'),
     channel: str | None = Query(None, pattern='^(in_app|email)$'),
     actor: Principal = Depends(require_roles('administrador', 'operador_alertas', 'auditor')),
     engine: Engine = Depends(get_read_engine),
@@ -121,7 +121,14 @@ def list_alert_deliveries(
         .join(sources, events.c.source_id == sources.c.id)
         .join(alert_rules, alerts.c.rule_id == alert_rules.c.id))
     conditions = [sources.c.name == IGP_SOURCE]
-    if status:
+    # 'Caducada' es una cancelación técnica por EVENT_TOO_OLD; diferenciarla
+    # de las cancelaciones administrativas sin modificar el enum PostgreSQL.
+    if status == 'expired':
+        conditions.extend([deliveries.c.status == 'cancelled', deliveries.c.error_code == 'EVENT_TOO_OLD'])
+    elif status == 'cancelled':
+        conditions.extend([deliveries.c.status == 'cancelled',
+                           or_(deliveries.c.error_code.is_(None), deliveries.c.error_code != 'EVENT_TOO_OLD')])
+    elif status:
         conditions.append(deliveries.c.status == status)
     if channel:
         conditions.append(deliveries.c.channel == channel)

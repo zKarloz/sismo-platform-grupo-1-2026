@@ -2,9 +2,9 @@
  * Entregas consulta la API protegida y explica por qué algunos correos caducaron.
  * La autorización y la simulación sin efectos secundarios se verifican en FastAPI.
  */
-import {useCallback, useEffect, useState} from 'react';
+import {Fragment, useCallback, useEffect, useState} from 'react';
 import {NavLink, useLocation} from 'react-router-dom';
-import {AlertTriangle, BellPlus, BellRing, CheckCircle2, FlaskConical, MailCheck, RefreshCw} from 'lucide-react';
+import {AlertTriangle, BellPlus, BellRing, CheckCircle2, ChevronDown, FlaskConical, MailCheck, RefreshCw} from 'lucide-react';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import Modal from '../../components/ui/Modal';
 import TablePagination, {type TablePageSize} from '../../components/ui/TablePagination';
@@ -54,6 +54,40 @@ const when = (date?: string | null) => date
   ? new Date(date).toLocaleString('es-PE', {timeZone: 'America/Lima', dateStyle: 'medium', timeStyle: 'short'})
   : '—';
 
+
+/** Información expandida reutilizada en móvil y escritorio.
+ * Sigue el patrón de Fuentes de datos: datos en columnas y una observación destacada.
+ * El backend solo devuelve códigos de error seguros y destinatarios enmascarados.
+ */
+function DeliveryExpandedDetails({item}: {item: AlertDeliveryItem}) {
+  const observation = isExpiredDelivery(item)
+    ? 'Correo no enviado: el sismo superó la ventana de antigüedad permitida. La entrega se conserva para auditoría.'
+    : isUncertainDelivery(item)
+      ? 'El servidor SMTP podría haber aceptado el mensaje. Se suspendieron los reintentos automáticos; requiere revisión del administrador.'
+      : item.error_code ? 'Se registró una incidencia en la entrega. Consulta el código para su seguimiento.' : null;
+  return <div className="space-y-3 text-xs text-main">
+    <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="min-w-0"><dt className="text-muted">Creación (Perú)</dt>
+        <dd className="mt-1 font-medium">{when(item.created_at)}</dd></div>
+      <div className="min-w-0"><dt className="text-muted">Próximo intento</dt>
+        <dd className="mt-1 font-medium">{when(item.next_attempt_at)}</dd></div>
+      <div className="min-w-0"><dt className="text-muted">Acuse</dt>
+        <dd className="mt-1 font-medium">{when(item.acknowledged_at)}</dd></div>
+      <div className="min-w-0"><dt className="text-muted">Estado del aviso</dt>
+        <dd className="mt-1 font-medium">{statusNames[item.alert_status]}</dd></div>
+      <div className="min-w-0"><dt className="text-muted">ID de entrega</dt>
+        <dd className="mt-1 break-all font-medium">{item.id}</dd></div>
+      {item.error_code && <div className="min-w-0"><dt className="text-muted">Código de incidencia</dt>
+        <dd className="mt-1 break-all font-semibold">{item.error_code}</dd></div>}
+    </dl>
+    {observation && <div className="rounded-lg border border-yellow-300 bg-yellow-100/80 p-3 text-yellow-900 dark:border-amber-700 dark:bg-amber-950/65 dark:text-amber-200">
+      <p><strong>Observación:</strong> {observation}</p>
+    </div>}
+    {item.source_url.startsWith('https://') && <a href={item.source_url} target="_blank"
+      rel="noopener noreferrer" className="inline-flex font-semibold text-main underline underline-offset-2 hover:opacity-80">Consultar fuente oficial IGP</a>}
+  </div>;
+}
+
 export default function AlertasPage() {
   const {profile} = useAuth();
   const isAdmin = profile?.role === 'administrador';
@@ -81,6 +115,7 @@ export default function AlertasPage() {
   const [deliveryPageSize, setDeliveryPageSize] = useState<TablePageSize>(5);
   const [deliveryStatus, setDeliveryStatus] = useState('');
   const [deliveryChannel, setDeliveryChannel] = useState('');
+  const [expandedDeliveryId, setExpandedDeliveryId] = useState<string | null>(null);
   const [deliveryLoading, setDeliveryLoading] = useState(false);
   const [deliveryError, setDeliveryError] = useState('');
   const [reload, setReload] = useState(0);
@@ -287,18 +322,19 @@ export default function AlertasPage() {
           <div className="flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-2 text-xs font-medium text-main">Canal
               <select aria-label="Filtrar entregas por canal" value={deliveryChannel}
-                onChange={e => {setDeliveryChannel(e.target.value);setDeliveryPage(1);}}
+                onChange={e => {setDeliveryChannel(e.target.value);setDeliveryPage(1);setExpandedDeliveryId(null);}}
                 className="rounded-lg border border-border-ui bg-panel px-3 py-2 text-sm text-main">
                 <option value="">Todos</option><option value="email">Correo</option><option value="in_app">Interno</option>
               </select>
             </label>
             <label className="flex items-center gap-2 text-xs font-medium text-main">Estado
               <select aria-label="Filtrar entregas por estado" value={deliveryStatus}
-                onChange={e => {setDeliveryStatus(e.target.value);setDeliveryPage(1);}}
+                onChange={e => {setDeliveryStatus(e.target.value);setDeliveryPage(1);setExpandedDeliveryId(null);}}
                 className="rounded-lg border border-border-ui bg-panel px-3 py-2 text-sm text-main">
                 <option value="">Todos</option><option value="pending">Pendiente</option>
                 <option value="sent">Enviada</option><option value="failed">Fallida</option>
                 <option value="cancelled">Cancelada</option>
+                <option value="expired">Caducada</option>
               </select>
             </label>
           </div>
@@ -310,7 +346,7 @@ export default function AlertasPage() {
         {!deliveryLoading && !deliveryError && deliveryItems.length === 0 && <p className="p-5 text-sm text-muted">
           No hay entregas para los filtros seleccionados.
         </p>}
-        {/* En móvil usamos tarjetas; en escritorio, tabla con las mismas entregas reales. */}
+        {/* En móvil: información resumida y un panel expandible; sin columnas estrechas. */}
         {!deliveryLoading && !deliveryError && deliveryItems.length > 0 && <div className="divide-y divide-border-ui md:hidden">
           {deliveryItems.map(item => <article key={item.id} className="p-4">
             <div className="flex items-start justify-between gap-3">
@@ -329,22 +365,21 @@ export default function AlertasPage() {
               <div><dt>Último intento</dt><dd className="mt-1 text-main">{when(item.last_attempt_at)}</dd></div>
               <div><dt>Envío</dt><dd className="mt-1 text-main">{when(item.delivered_at)}</dd></div>
             </dl>
-            <details className="mt-3 border-t border-border-ui pt-3 text-xs text-main">
-              <summary className="cursor-pointer font-semibold">Ver detalles</summary>
-              <dl className="mt-2 grid grid-cols-2 gap-3 text-muted">
-                <div><dt>Creación</dt><dd className="text-main">{when(item.created_at)}</dd></div>
-                <div><dt>Próximo intento</dt><dd className="text-main">{when(item.next_attempt_at)}</dd></div>
-                <div><dt>Acuse</dt><dd className="text-main">{when(item.acknowledged_at)}</dd></div>
-                <div><dt>Estado del aviso</dt><dd className="text-main">{statusNames[item.alert_status]}</dd></div>
-                {item.error_code && <div className="col-span-2"><dt>Error (código)</dt><dd className={`font-semibold ${isExpiredDelivery(item) ? 'text-amber-800 dark:text-amber-300' : 'text-red-700 dark:text-red-300'}`}>{item.error_code}</dd></div>}
-                {isExpiredDelivery(item) && <p className="col-span-2 text-amber-800 dark:text-amber-300">Correo no enviado: el sismo superó la ventana de antigüedad permitida. La entrega se conserva para auditoría.</p>}
-                {isUncertainDelivery(item) && <p className="col-span-2 text-amber-800 dark:text-amber-300">El servidor SMTP podría haber aceptado el mensaje. Se suspendieron los reintentos automáticos; requiere revisión del administrador.</p>}
-              </dl>
-              {item.source_url.startsWith('https://') && <a href={item.source_url} target="_blank" rel="noopener noreferrer"
-                className="mt-2 inline-block text-accent underline underline-offset-2">Fuente IGP</a>}
-            </details>
+            <button type="button" aria-expanded={expandedDeliveryId === item.id}
+              aria-controls={`entrega-movil-${item.id}`}
+              aria-label={`Ver detalles de entrega ${item.id}`}
+              onClick={() => setExpandedDeliveryId(value => value === item.id ? null : item.id)}
+              className="mt-3 inline-flex w-full items-center justify-between border-t border-border-ui pt-3 text-xs font-semibold text-main">
+              Detalles
+              <ChevronDown size={17} className={`transition-transform duration-200 ${expandedDeliveryId === item.id ? 'rotate-180' : ''}`}/>
+            </button>
+            {expandedDeliveryId === item.id && <div id={`entrega-movil-${item.id}`}
+              className="mt-3 rounded-lg border border-border-ui bg-panel-alt/40 p-3">
+              <DeliveryExpandedDetails item={item}/>
+            </div>}
           </article>)}
         </div>}
+        {/* Igual que Historial de sincronizaciones: fila de detalle independiente a todo el ancho. */}
         {!deliveryLoading && !deliveryError && deliveryItems.length > 0 && <div className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-[900px] border-collapse text-left text-xs">
             <thead className="border-b border-border-ui bg-panel-alt text-muted">
@@ -354,42 +389,45 @@ export default function AlertasPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border-ui">
-              {deliveryItems.map(item => <tr key={item.id} className="align-top hover:bg-panel-alt/50">
-                <td className="max-w-[260px] px-4 py-3">
-                  <p className="font-semibold text-main">{item.alert_title}</p>
-                  <p className="mt-1 text-muted">{item.rule_name} · M {item.magnitude ?? '—'} · {when(item.occurred_at)}</p>
-                </td>
-                <td className="px-4 py-3">
-                  <p className="font-medium text-main">{item.channel === 'email' ? 'Correo electrónico' : 'Centro interno'}</p>
-                  <p className="mt-1 break-all text-muted">{item.destination_display}</p>
-                </td>
-                <td className="px-4 py-3"><span className={`inline-flex rounded-full border px-2 py-1 font-semibold ${deliveryColor(item)}`}>
-                  {deliveryLabel(item)}
-                </span></td>
-                <td className="px-4 py-3 tabular-nums text-main">{item.attempts}</td>
-                <td className="whitespace-nowrap px-4 py-3 text-main">{when(item.last_attempt_at)}</td>
-                <td className="whitespace-nowrap px-4 py-3 text-main">{when(item.delivered_at)}</td>
-                <td className="px-4 py-3"><details className="min-w-36 text-main">
-                  <summary className="cursor-pointer font-semibold text-accent">Ver detalles</summary>
-                  <dl className="mt-2 space-y-2 text-muted">
-                    <div><dt>Creación</dt><dd className="text-main">{when(item.created_at)}</dd></div>
-                    <div><dt>Próximo intento</dt><dd className="text-main">{when(item.next_attempt_at)}</dd></div>
-                    <div><dt>Acuse</dt><dd className="text-main">{when(item.acknowledged_at)}</dd></div>
-                    <div><dt>Estado del aviso</dt><dd className="text-main">{statusNames[item.alert_status]}</dd></div>
-                    {item.error_code && <div><dt>Error (código)</dt><dd className={`font-semibold ${isExpiredDelivery(item) ? 'text-amber-800 dark:text-amber-300' : 'text-red-700 dark:text-red-300'}`}>{item.error_code}</dd></div>}
-                    {isExpiredDelivery(item) && <p className="col-span-2 text-amber-800 dark:text-amber-300">Correo no enviado: el sismo superó la ventana de antigüedad permitida. La entrega se conserva para auditoría.</p>}
-                {isUncertainDelivery(item) && <p className="text-amber-800 dark:text-amber-300">El servidor SMTP podría haber aceptado el mensaje. Sin reintentos automáticos; requiere revisión del administrador.</p>}
-                  </dl>
-                  {item.source_url.startsWith('https://') && <a href={item.source_url}
-                    target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-accent underline underline-offset-2">Fuente IGP</a>}
-                </details></td>
-              </tr>)}
+              {deliveryItems.map(item => <Fragment key={item.id}>
+                <tr className="align-top hover:bg-panel-alt/50">
+                  <td className="max-w-[260px] px-4 py-3">
+                    <p className="font-semibold text-main">{item.alert_title}</p>
+                    <p className="mt-1 text-muted">{item.rule_name} · M {item.magnitude ?? '—'} · {when(item.occurred_at)}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-main">{item.channel === 'email' ? 'Correo electrónico' : 'Centro interno'}</p>
+                    <p className="mt-1 break-all text-muted">{item.destination_display}</p>
+                  </td>
+                  <td className="px-4 py-3"><span className={`inline-flex rounded-full border px-2 py-1 font-semibold ${deliveryColor(item)}`}>
+                    {deliveryLabel(item)}
+                  </span></td>
+                  <td className="px-4 py-3 tabular-nums text-main">{item.attempts}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-main">{when(item.last_attempt_at)}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-main">{when(item.delivered_at)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button type="button" aria-expanded={expandedDeliveryId === item.id}
+                      aria-controls={`entrega-escritorio-${item.id}`}
+                      aria-label={`Ver detalles de entrega ${item.id}`}
+                      onClick={() => setExpandedDeliveryId(value => value === item.id ? null : item.id)}
+                      className="rounded-lg p-2 text-main hover:bg-panel-alt" title="Ver detalles">
+                      <ChevronDown size={17} className={`transition-transform duration-200 ${expandedDeliveryId === item.id ? 'rotate-180' : ''}`}/>
+                    </button>
+                  </td>
+                </tr>
+                {expandedDeliveryId === item.id && <tr className="bg-panel-alt/40">
+                  <td colSpan={7} id={`entrega-escritorio-${item.id}`}
+                    className="border-t border-border-ui px-4 py-4">
+                    <DeliveryExpandedDetails item={item}/>
+                  </td>
+                </tr>}
+              </Fragment>)}
             </tbody>
           </table>
         </div>}
           <TablePagination page={deliveryPage} pages={deliveryPages} pageSize={deliveryPageSize}
-            disabled={deliveryLoading} onPageChange={setDeliveryPage}
-            onPageSizeChange={size => {setDeliveryPageSize(size);setDeliveryPage(1);}}/>
+            disabled={deliveryLoading} onPageChange={next => {setDeliveryPage(next);setExpandedDeliveryId(null);}}
+            onPageSizeChange={size => {setDeliveryPageSize(size);setDeliveryPage(1);setExpandedDeliveryId(null);}}/>
         </div>
         <p className="flex items-start gap-2 text-xs text-muted"><AlertTriangle size={15} className="mt-0.5 shrink-0"/>
           «Enviada» significa publicación interna o aceptación SMTP; no confirma recepción ni lectura. Los avisos son informativos y posteriores al sismo.

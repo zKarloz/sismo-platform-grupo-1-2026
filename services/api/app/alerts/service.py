@@ -26,6 +26,7 @@ LIMA = ZoneInfo('America/Lima')
 NOTICE = 'Aviso informativo sobre un sismo registrado. No es una alerta oficial ni temprana.'
 TOKENS = {'magnitude', 'place', 'occurred_at', 'depth_km', 'source_url', 'source_name'}
 MAX_ATTEMPTS = 3
+EMAIL_EXPIRED = 'EVENT_TOO_OLD'  # Solo para el historial; no se reintenta.
 
 
 def _now(value: datetime | None = None) -> datetime:
@@ -355,7 +356,73 @@ def _send_email(destination: str, subject: str, body: str) -> None:
             pass
 
 
-def _eligible_delivery(now: datetime):
+def _operational_email_max_age() -> timedelta:
+    """Ventana segura de frescura (1 a 24 horas), con 6 h predeterminadas.
+
+    La configuración inválida bloquea el correo en lugar de enviar un backlog.
+    """
+    value = os.getenv('OPERATIONAL_EMAIL_MAX_AGE_HOURS', '6').strip()
+    if not re.fullmatch(r'[0-9]{1,2}', value) or not 1 <= int(value) <= 24:
+        raise ValueError('OPERATIONAL_EMAIL_MAX_AGE_HOURS debe estar entre 1 y 24')
+    return timedelta(hours=int(value))
+
+
+def _recent_email_event(now: datetime, age: timedelta):
+    """Usa el instante del sismo, NO la aprobación ni la fecha de ingesta."""
+    return select(alerts.c.id).select_from(
+        alerts.join(events, alerts.c.event_id == events.c.id)
+    ).where(
+        alerts.c.id == deliveries.c.alert_id,
+        events.c.occurred_at >= now - age,
+        events.c.occurred_at <= now + timedelta(minutes=5),
+    ).exists()
+
+
+def _expire_old_email_deliveries(engine, now: datetime, age: timedelta,
+                                 destination_guard=None) -> int:
+    """Cancelar entregas atrasadas sin SMTP, conservando el historial.
+
+    Solo se cancelan pendientes/reintentos seguros de avisos IGP aprobados.
+    Una entrega ya enviada o un resultado SMTP ambiguo nunca se modifica.
+    """
+    stale = select(alerts.c.id).select_from(
+        alerts.join(events, alerts.c.event_id == events.c.id)
+              .join(sources, events.c.source_id == sources.c.id)
+    ).where(
+        alerts.c.id == deliveries.c.alert_id,
+        alerts.c.status.in_(['approved', 'failed']),
+        sources.c.name == 'IGP/CENSIS',
+        events.c.occurred_at < now - age,
+    ).exists()
+    mutable = or_(
+        deliveries.c.status == 'pending',
+        and_(deliveries.c.status == 'failed',
+             deliveries.c.error_code == SMTP_SEND_FAILED,
+             deliveries.c.next_attempt_at.is_not(None)),
+    )
+    conditions = [deliveries.c.channel == 'email', mutable, stale]
+    if destination_guard is not None:
+        conditions.append(destination_guard)
+    with engine.begin() as conn:
+        ids = conn.execute(select(deliveries.c.id).where(*conditions)
+                           .order_by(deliveries.c.created_at.asc(), deliveries.c.id.asc())
+                           .limit(200)).scalars().all()
+        expired = 0
+        for delivery_id in ids:
+            # La condición mutable se reevalúa en el UPDATE por concurrencia.
+            result = conn.execute(update(deliveries).where(
+                deliveries.c.id == delivery_id, *conditions,
+            ).values(status='cancelled', next_attempt_at=None,
+                     error_code=EMAIL_EXPIRED).returning(deliveries.c.id)).scalar_one_or_none()
+            if result is None:
+                continue
+            _audit(conn, action='alert.delivery.expired', table='alert_deliveries',
+                   entity_id=delivery_id, after={'channel': 'email', 'reason': EMAIL_EXPIRED})
+            expired += 1
+        return expired
+
+
+def _eligible_delivery(now: datetime, *, email_age: timedelta | None = None):
     """Elegibilidad reutilizada en SELECT y reserva CAS, siempre bajo las reglas IGP."""
     # failed solo es reintentable si el fallo ocurrió antes de la entrega SMTP
     # y se programó explícitamente un próximo intento.
@@ -386,7 +453,11 @@ def _eligible_delivery(now: datetime):
             alerts.c.approved_by.is_not(None), alerts.c.approved_at.is_not(None),
         )),
     ).exists()
-    return and_(deliveries.c.attempts < MAX_ATTEMPTS, or_(pending_due, retry_due), valid_alert)
+    # La edad limita solo el correo; los avisos internos no caducan.
+    freshness = (or_(deliveries.c.channel != 'email', _recent_email_event(now, email_age))
+                 if email_age is not None else True)
+    return and_(deliveries.c.attempts < MAX_ATTEMPTS,
+                or_(pending_due, retry_due), valid_alert, freshness)
 
 
 def dispatch(engine, *, now: datetime | None = None, send_email: bool = False,
@@ -405,6 +476,13 @@ def dispatch(engine, *, now: datetime | None = None, send_email: bool = False,
     # La protección es del backend (SELECT y UPDATE CAS), nunca solo del YAML.
     test_mode = send_email and os.getenv('OPERATIONAL_EMAIL_TEST_MODE', '').lower() == 'true'
     test_destination = os.getenv('OPERATIONAL_EMAIL_TEST_RECIPIENT', '').strip().lower()
+    # Cron: lote acotado para no vaciar masivamente una cola recién habilitada.
+    batch_limit = 200
+    if send_email and not test_mode:
+        batch_limit_str = os.getenv('OPERATIONAL_EMAIL_BATCH_LIMIT', '10').strip()
+        if not re.fullmatch(r'[0-9]{1,2}', batch_limit_str) or not 1 <= int(batch_limit_str) <= 50:
+            raise ValueError('OPERATIONAL_EMAIL_BATCH_LIMIT debe estar entre 1 y 50')
+        batch_limit = int(batch_limit_str)
     if test_mode and not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', test_destination):
         raise ValueError('Falta destinatario válido para prueba operativa')
     destination_guard = (
@@ -416,10 +494,14 @@ def dispatch(engine, *, now: datetime | None = None, send_email: bool = False,
     # contrata que el fake eleva excepciones solo si NO efectuó la entrega.
     injected = mailer is not None
     mailer = mailer if mailer is not None else _send_email
+    # Comprobar configuracion antes de reservar cualquier entrega.
+    email_age = _operational_email_max_age() if send_email else None
+    expired = (_expire_old_email_deliveries(engine, now, email_age, destination_guard)
+               if send_email else 0)
     with engine.connect() as conn:
         # Excluir email ANTES del LIMIT: miles de correos pendientes no deben
         # impedir que se publiquen entregas in_app en modo seguro por defecto.
-        candidates = select(deliveries.c.id).where(_eligible_delivery(now))
+        candidates = select(deliveries.c.id).where(_eligible_delivery(now, email_age=email_age))
         if destination_guard is not None:
             candidates = candidates.where(destination_guard)
         if not send_email:
@@ -428,7 +510,7 @@ def dispatch(engine, *, now: datetime | None = None, send_email: bool = False,
         # El cron ordinario conserva su lote de 200 entregas internas.
         candidate_ids = conn.execute(candidates
             .order_by(deliveries.c.created_at.asc(), deliveries.c.id.asc())
-            .limit(1 if test_mode else 200)).scalars().all()
+            .limit(1 if test_mode else batch_limit)).scalars().all()
 
     for delivery_id in candidate_ids:
         # Mantener los correos completamente desactivados si no se usó
@@ -440,7 +522,8 @@ def dispatch(engine, *, now: datetime | None = None, send_email: bool = False,
                     deliveries.c.id == delivery_id)).scalar_one_or_none() == 'email'
                 if is_email:
                     continue
-            claim_conditions = [deliveries.c.id == delivery_id, _eligible_delivery(now)]
+            claim_conditions = [deliveries.c.id == delivery_id,
+                                _eligible_delivery(now, email_age=email_age)]
             # Evita TOCTOU si el destino cambia mientras esperamos una reserva.
             if destination_guard is not None:
                 claim_conditions.append(destination_guard)
@@ -540,7 +623,7 @@ def dispatch(engine, *, now: datetime | None = None, send_email: bool = False,
                 uncertain += 1
 
     return {'sent': sent, 'failed': failed, 'uncertain': uncertain,
-            'email_enabled': send_email}
+            'expired': expired, 'email_enabled': send_email}
 
 
 def acknowledge(engine, *, delivery_id: UUID, actor_email: str, now: datetime | None = None) -> None:

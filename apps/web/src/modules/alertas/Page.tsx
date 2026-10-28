@@ -1,5 +1,5 @@
 /** Centro de alertas IGP: Bandeja, Reglas y Entregas con rutas propias.
- * Fase B: Entregas consulta la API protegida y paginada de alert_deliveries.
+ * Entregas consulta la API protegida y explica por qué algunos correos caducaron.
  * La autorización y la simulación sin efectos secundarios se verifican en FastAPI.
  */
 import {useCallback, useEffect, useState} from 'react';
@@ -44,9 +44,10 @@ const deliveryStatusColors: Record<AlertDeliveryItem['status'], string> = {
 // Un error ambiguo NO equivale a un rechazo confirmado del correo.
 // La reserva permanece sin reintento automático hasta una revisión operativa.
 const isUncertainDelivery = (item: AlertDeliveryItem) => item.error_code === 'SMTP_OUTCOME_UNKNOWN';
+const isExpiredDelivery = (item: AlertDeliveryItem) => item.error_code === 'EVENT_TOO_OLD';
 const deliveryLabel = (item: AlertDeliveryItem) => isUncertainDelivery(item)
-  ? 'Revisión requerida' : deliveryStatusNames[item.status];
-const deliveryColor = (item: AlertDeliveryItem) => isUncertainDelivery(item)
+  ? 'Revisión requerida' : isExpiredDelivery(item) ? 'Caducada' : deliveryStatusNames[item.status];
+const deliveryColor = (item: AlertDeliveryItem) => isUncertainDelivery(item) || isExpiredDelivery(item)
   ? 'border-amber-400/50 bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300'
   : deliveryStatusColors[item.status];
 const when = (date?: string | null) => date
@@ -335,7 +336,8 @@ export default function AlertasPage() {
                 <div><dt>Próximo intento</dt><dd className="text-main">{when(item.next_attempt_at)}</dd></div>
                 <div><dt>Acuse</dt><dd className="text-main">{when(item.acknowledged_at)}</dd></div>
                 <div><dt>Estado del aviso</dt><dd className="text-main">{statusNames[item.alert_status]}</dd></div>
-                {item.error_code && <div className="col-span-2"><dt>Error (código)</dt><dd className="font-semibold text-red-700 dark:text-red-300">{item.error_code}</dd></div>}
+                {item.error_code && <div className="col-span-2"><dt>Error (código)</dt><dd className={`font-semibold ${isExpiredDelivery(item) ? 'text-amber-800 dark:text-amber-300' : 'text-red-700 dark:text-red-300'}`}>{item.error_code}</dd></div>}
+                {isExpiredDelivery(item) && <p className="col-span-2 text-amber-800 dark:text-amber-300">Correo no enviado: el sismo superó la ventana de antigüedad permitida. La entrega se conserva para auditoría.</p>}
                 {isUncertainDelivery(item) && <p className="col-span-2 text-amber-800 dark:text-amber-300">El servidor SMTP podría haber aceptado el mensaje. Se suspendieron los reintentos automáticos; requiere revisión del administrador.</p>}
               </dl>
               {item.source_url.startsWith('https://') && <a href={item.source_url} target="_blank" rel="noopener noreferrer"
@@ -374,8 +376,9 @@ export default function AlertasPage() {
                     <div><dt>Próximo intento</dt><dd className="text-main">{when(item.next_attempt_at)}</dd></div>
                     <div><dt>Acuse</dt><dd className="text-main">{when(item.acknowledged_at)}</dd></div>
                     <div><dt>Estado del aviso</dt><dd className="text-main">{statusNames[item.alert_status]}</dd></div>
-                    {item.error_code && <div><dt>Error (código)</dt><dd className="font-semibold text-red-700 dark:text-red-300">{item.error_code}</dd></div>}
-                    {isUncertainDelivery(item) && <p className="text-amber-800 dark:text-amber-300">El servidor SMTP podría haber aceptado el mensaje. Sin reintentos automáticos; requiere revisión del administrador.</p>}
+                    {item.error_code && <div><dt>Error (código)</dt><dd className={`font-semibold ${isExpiredDelivery(item) ? 'text-amber-800 dark:text-amber-300' : 'text-red-700 dark:text-red-300'}`}>{item.error_code}</dd></div>}
+                    {isExpiredDelivery(item) && <p className="col-span-2 text-amber-800 dark:text-amber-300">Correo no enviado: el sismo superó la ventana de antigüedad permitida. La entrega se conserva para auditoría.</p>}
+                {isUncertainDelivery(item) && <p className="text-amber-800 dark:text-amber-300">El servidor SMTP podría haber aceptado el mensaje. Sin reintentos automáticos; requiere revisión del administrador.</p>}
                   </dl>
                   {item.source_url.startsWith('https://') && <a href={item.source_url}
                     target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-accent underline underline-offset-2">Fuente IGP</a>}

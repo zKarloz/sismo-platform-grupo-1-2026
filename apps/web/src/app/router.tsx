@@ -15,7 +15,6 @@ import FuentesPage from '../modules/fuentes-datos/Page';
 import ReportesPage from '../modules/reportes/Page';
 import UsuariosPage from '../modules/usuarios-roles/Page';
 import AuditoriaPage from '../modules/auditoria/Page';
-import MisNotificacionesPage from '../modules/mis-notificaciones/Page';
 import HistoricoIGPPage from '../modules/historico-igp/Page';
 
 export const router = createBrowserRouter([{ path: '/login', element: <LoginPage /> },
@@ -33,9 +32,8 @@ export const router = createBrowserRouter([{ path: '/login', element: <LoginPage
     { path: 'alertas', element: <AlertasPage /> },
     { path: 'alertas/reglas', element: <AlertasPage /> },
     { path: 'alertas/entregas', element: <AlertasPage /> },
-    // Transición controlada: accesible por URL directa hasta retirar el proceso personal en Fase E.
-    // No se elimina aquí para evitar cortar el servicio actual de correos personales.
-    { path: 'mis-notificaciones', element: <MisNotificacionesPage /> },
+    // El antiguo módulo de preferencias no tiene ruta: solo el Centro de alertas
+    // administra destinatarios y umbrales de correo desde las reglas.
     { path: 'fuentes-datos', element: <FuentesPage /> },
     { path: 'reportes', element: <ReportesPage /> },
     { element: <RequireRole roles={['administrador', 'auditor']} />, children: [

@@ -48,7 +48,7 @@ test('UI: un fallo ambiguo muestra revisión y nunca se presenta como fallido co
 
 test('Despachador: reserva antes de SMTP y no devuelve errores privados', () => {
   assert.match(service, /def _eligible_delivery\(/);
-  assert.match(service, /_eligible_delivery\(now\)/);
+  assert.match(service, /_eligible_delivery\(now, email_age=email_age\)/);
   assert.match(service, /SMTP_OUTCOME_UNKNOWN/);
   assert.match(service, /alert\.delivery\.claimed/);
   assert.match(service, /def review\(/);

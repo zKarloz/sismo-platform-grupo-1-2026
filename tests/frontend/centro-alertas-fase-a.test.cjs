@@ -29,8 +29,8 @@ test('tres rutas recargables con vínculo directo, una entrada en el sidebar', (
   assert.match(page, /border-b-2 border-accent text-main/);
 });
 
-test('la ruta personal continúa temporalmente sin navegación para evitar cortar correos', () => {
-  assert.match(router, /path: 'mis-notificaciones'/);
+test('tras el corte, la ruta personal deja de estar publicada', () => {
+  assert.doesNotMatch(router, /path: 'mis-notificaciones'/);
   assert.doesNotMatch(navigation, /path: '\/mis-notificaciones'/);
   assert.doesNotMatch(layout, /Mis notificaciones/);
 });

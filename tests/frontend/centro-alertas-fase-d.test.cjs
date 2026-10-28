@@ -23,14 +23,13 @@ test('Workflow: prueba de correo requiere flag + evento manual + aceptación del
   assert.match(workflow, /OPERATIONAL_EMAIL_TEST_MODE: 'true'/);
 });
 
-test('Workflow: el cron habitual conserva alertas internas y correo personal durante transición', () => {
+test('Workflow: el despacho interno continúa y ya no se programan correos personales', () => {
   assert.match(workflow, /python -m app\.commands\.alerts dispatch\n/);
-  assert.match(workflow, /python -m app\.commands\.personal_notifications dispatch --send-email/);
-  assert.match(workflow, /if: \$\{\{ !\(github\.event_name == 'workflow_dispatch' && inputs\.test_operational_email == true\) \}\}/);
+  assert.doesNotMatch(workflow, /python -m app\.commands\.personal_notifications (evaluate|dispatch)/);
 });
 
 test('Backend: límite de una entrega en prueba y destino protegido en reserva CAS', () => {
-  assert.match(service, /\.limit\(1 if test_mode else 200\)/);
+  assert.match(service, /\.limit\(1 if test_mode else batch_limit\)/);
   assert.match(service, /claim_conditions\.append\(destination_guard\)/);
   assert.match(service, /Falta destinatario válido para prueba operativa/);
 });

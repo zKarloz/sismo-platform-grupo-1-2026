@@ -87,7 +87,7 @@ def list_alerts(page: int = Query(1, ge=1), page_size: int = Query(5, ge=1, le=1
 
 # Los errores SMTP crudos nunca se publican; son datos operativos y pueden incluir
 # nombres de cuenta, servidores, direcciones o información de autenticación.
-SAFE_DELIVERY_ERRORS = frozenset({'SMTP_SEND_FAILED', 'DELIVERY_FAILED', 'SMTP_NOT_CONFIGURED', 'UNKNOWN_CHANNEL', 'SMTP_OUTCOME_UNKNOWN'})
+SAFE_DELIVERY_ERRORS = frozenset({'SMTP_SEND_FAILED', 'DELIVERY_FAILED', 'SMTP_NOT_CONFIGURED', 'UNKNOWN_CHANNEL', 'SMTP_OUTCOME_UNKNOWN', 'EVENT_TOO_OLD'})
 
 
 def _delivery_destination(channel: str, destination: str | None) -> str:

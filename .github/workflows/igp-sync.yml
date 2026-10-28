@@ -1,4 +1,5 @@
-# Ingesta automatizada de reportes IGP/CENSIS publicados.
+# Ingesta automatizada IGP/CENSIS y avisos operativos administrados.
+# El sistema de suscripciones personales ya no ejecuta tareas programadas.
 # Esta tarea NO emite alertas tempranas ni predice terremotos.
 # No necesita mantener FastAPI/Render activo y no reemplaza ci.yml.
 name: Sincronización IGP a Supabase
@@ -103,9 +104,38 @@ jobs:
           # No realiza envíos externos ni salta aprobación humana.
           python -m app.commands.alerts dispatch
 
+      - name: Enviar correos operativos aprobados (solo calendario habilitado)
+        # Sustituye definitivamente el envío personal. La bandera está
+        # desactivada hasta que el administrador complete el corte en GitHub.
+        # Requiere además que el antiguo flag personal quede EXPLICITAMENTE false.
+        # No ejecutar este paso en workflow_dispatch: la prueba manual ya está
+        # aislada y limitada a un único destinatario.
+        if: ${{ github.event_name == 'schedule' && vars.ENABLE_OPERATIONAL_EMAIL == 'true' && vars.ENABLE_PERSONAL_EMAIL == 'false' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ALERT_SMTP_HOST: ${{ secrets.ALERT_SMTP_HOST }}
+          ALERT_SMTP_PORT: ${{ vars.ALERT_SMTP_PORT || '465' }}
+          ALERT_SMTP_FROM: ${{ secrets.ALERT_SMTP_FROM }}
+          ALERT_SMTP_USER: ${{ secrets.ALERT_SMTP_USER }}
+          ALERT_SMTP_PASSWORD: ${{ secrets.ALERT_SMTP_PASSWORD }}
+          # Correos operativos únicamente sobre eventos recientes (UTC).
+          OPERATIONAL_EMAIL_MAX_AGE_HOURS: ${{ vars.OPERATIONAL_EMAIL_MAX_AGE_HOURS || '6' }}
+          OPERATIONAL_EMAIL_BATCH_LIMIT: ${{ vars.OPERATIONAL_EMAIL_BATCH_LIMIT || '10' }}
+          OPERATIONAL_EMAIL_TEST_MODE: 'false'
+        run: |
+          set -euo pipefail
+          # Fallar sin tocar la cola si la configuración SMTP es incompleta.
+          if [ -z "$ALERT_SMTP_HOST" ] || [ -z "$ALERT_SMTP_FROM" ] || [ -z "$ALERT_SMTP_USER" ] || [ -z "$ALERT_SMTP_PASSWORD" ]; then
+            echo '::error::Faltan los secretos SMTP para el correo operativo.'
+            exit 1
+          fi
+          python -m app.commands.alerts dispatch --send-email
+          echo '### Centro de alertas: correo operativo procesado' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Se procesaron únicamente entregas autorizadas de eventos recientes. Revisar Centro de alertas > Entregas.' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Probar envío operativo de alertas aprobadas (solo manual)
-        # Fase D: no activar envíos operativos en el cron mientras el flujo
-        # personal sigue vigente. La ejecución exige input + variable explícitos.
+        # Prueba de diagnóstico: independiente del cron y de las colas personales.
+        # Exige selección manual y variable explícita.
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.test_operational_email == true && vars.ENABLE_OPERATIONAL_EMAIL == 'true' }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -116,6 +146,7 @@ jobs:
           ALERT_SMTP_PASSWORD: ${{ secrets.ALERT_SMTP_PASSWORD }}
           # La selección y reserva se limitan a este email en FastAPI.
           OPERATIONAL_EMAIL_TEST_MODE: 'true'
+          OPERATIONAL_EMAIL_MAX_AGE_HOURS: ${{ vars.OPERATIONAL_EMAIL_MAX_AGE_HOURS || '6' }}
           OPERATIONAL_EMAIL_TEST_RECIPIENT: ${{ secrets.OPERATIONAL_EMAIL_TEST_RECIPIENT }}
         run: |
           set -euo pipefail
@@ -133,34 +164,3 @@ jobs:
           echo '### Centro de alertas: prueba operativa ejecutada' >> "$GITHUB_STEP_SUMMARY"
           echo 'Revisar el resultado en Centro de alertas > Entregas. SMTP aceptado no equivale a lectura.' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Preparar avisos personales de cuentas suscritas
-        # Evitar dos tipos de correo en la misma ejecución de PRUEBA operativa.
-        # El cron personal ordinario sigue intacto hasta la Fase E.
-        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.test_operational_email == true) }}
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: |
-          # No envía correos; crea una cola idempotente por usuario y evento.
-          python -m app.commands.personal_notifications evaluate
-
-      - name: Enviar correos personales (solo con habilitación explícita)
-        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.test_operational_email == true) }}
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ENABLE_PERSONAL_EMAIL: ${{ vars.ENABLE_PERSONAL_EMAIL }}
-          ALERT_SMTP_HOST: ${{ secrets.ALERT_SMTP_HOST }}
-          ALERT_SMTP_PORT: ${{ vars.ALERT_SMTP_PORT || '465' }}
-          ALERT_SMTP_FROM: ${{ secrets.ALERT_SMTP_FROM }}
-          ALERT_SMTP_USER: ${{ secrets.ALERT_SMTP_USER }}
-          ALERT_SMTP_PASSWORD: ${{ secrets.ALERT_SMTP_PASSWORD }}
-        run: |
-          # No requiere ni expone contraseña si el operador no activó el canal.
-          if [ "$ENABLE_PERSONAL_EMAIL" != 'true' ]; then
-            echo 'Envíos personales deshabilitados; solo se generó la cola.'
-            exit 0
-          fi
-          if [ -z "$ALERT_SMTP_HOST" ] || [ -z "$ALERT_SMTP_FROM" ] || [ -z "$ALERT_SMTP_USER" ] || [ -z "$ALERT_SMTP_PASSWORD" ]; then
-            echo '::error::Faltan credenciales SMTP privadas para el envío personal.'
-            exit 1
-          fi
-          python -m app.commands.personal_notifications dispatch --send-email

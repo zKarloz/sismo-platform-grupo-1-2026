@@ -67,5 +67,6 @@ def test_sources_and_invalid_date(db_client):
     client, _ = db_client
     source_response = client.get("/api/v1/sources")
     assert source_response.status_code == 200
-    assert source_response.json()["items"][0]["name"] == "USGS"
+    # El fixture solo contiene USGS, que debe permanecer oculto.
+    assert source_response.json()["items"] == []
     assert client.get("/api/v1/events?start_time=2026-10-01T10:00:00").status_code == 422

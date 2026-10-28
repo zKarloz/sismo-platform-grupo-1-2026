@@ -30,7 +30,7 @@ test('Acciones de Reglas usan el Modal común en lugar de tarjetas expandibles',
   assert.match(rule, /createAlertRule\(payload\)/);
 });
 test('Gmail: acción superior abre modal y el password vive solo en formulario efímero', () => {
-  assert.match(page, /Probar mi Gmail desde la web \(opcional\)/);
+  assert.match(page, /Probar envío de correo/);
   assert.match(page, /setGmailModal\(true\)/);
   assert.match(page, /<GmailTestForm recipient=/);
   assert.match(smtp, /export function GmailTestForm/);
@@ -43,5 +43,5 @@ test('Permisos de los 3 formularios permanecen diferenciados', () => {
   assert.match(page, /isAdmin && <Modal open=\{ruleModal\}/);
   assert.match(page, /open=\{simulationModal && canSimulate\}/);
   assert.match(page, /isAdmin && <Modal open=\{gmailModal\}/);
-  assert.match(page, /role="tabpanel"/);
+  assert.match(page, /aria-label="Reglas de alertas"/);
 });

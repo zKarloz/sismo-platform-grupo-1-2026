@@ -29,7 +29,12 @@ export const router = createBrowserRouter([{ path: '/login', element: <LoginPage
     { path: 'analisis', element: <AnalisisPage /> },
     { path: 'calidad-datos', element: <CalidadPage /> },
     { path: 'modelos-ml', element: <ModelosPage /> },
+    // Las tres URLs muestran el mismo módulo, pero conservan la pestaña al recargar.
     { path: 'alertas', element: <AlertasPage /> },
+    { path: 'alertas/reglas', element: <AlertasPage /> },
+    { path: 'alertas/entregas', element: <AlertasPage /> },
+    // Transición controlada: accesible por URL directa hasta retirar el proceso personal en Fase E.
+    // No se elimina aquí para evitar cortar el servicio actual de correos personales.
     { path: 'mis-notificaciones', element: <MisNotificacionesPage /> },
     { path: 'fuentes-datos', element: <FuentesPage /> },
     { path: 'reportes', element: <ReportesPage /> },

@@ -49,6 +49,38 @@ export const getAlertHistory = (page: number, pageSize: number, status: string, 
     `/api/v1/alerts?page=${page}&page_size=${pageSize}${status ? `&status=${encodeURIComponent(status)}` : ''}`, signal,
   );
 
+/** Entregas operativas: paginadas por FastAPI, con destinatario anonimizado. */
+export type AlertDeliveryItem = {
+  id: string;
+  alert_id: string;
+  alert_title: string;
+  alert_status: AlertItem['status'];
+  rule_name: string;
+  channel: 'in_app' | 'email';
+  destination_display: string;
+  status: 'pending' | 'sent' | 'failed' | 'cancelled';
+  attempts: number;
+  created_at: string;
+  last_attempt_at: string | null;
+  next_attempt_at: string | null;
+  delivered_at: string | null;
+  acknowledged_at: string | null;
+  error_code: string | null;
+  occurred_at: string;
+  magnitude: number | null;
+  place: string | null;
+  source_url: string;
+};
+
+export const getAlertDeliveries = (
+  page: number, pageSize: number, status: string, channel: string, signal?: AbortSignal,
+) => read<{items: AlertDeliveryItem[]; total: number; page: number; page_size: number; disclaimer: string}>(
+  `/api/v1/alert-deliveries?page=${page}&page_size=${pageSize}`
+  + `${status ? `&status=${encodeURIComponent(status)}` : ''}`
+  + `${channel ? `&channel=${encodeURIComponent(channel)}` : ''}`,
+  signal,
+);
+
 // Control de reglas y aprobación; actor verificado por FastAPI.
 export const activateAlertRule = (id: string, enabled: boolean) =>
   apiAuthed<{ok:boolean}>(`/api/v1/admin/alert-rules/${id}/activation?enabled=${enabled}`, {method:'POST'});

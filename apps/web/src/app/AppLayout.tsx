@@ -1,7 +1,7 @@
 /** Navegación responsiva y perfil desplegable; colores semánticos en index.css. */
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Activity, BellRing, ChevronDown, ChevronRight, LogOut, Menu, Moon, ShieldCheck, Sun, UserRound } from 'lucide-react';
+import { Activity, ChevronDown, ChevronRight, LogOut, Menu, Moon, ShieldCheck, Sun, UserRound } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
 import { useTheme } from '../hooks/useTheme';
 import { AnalyticsProvider } from '../hooks/useAnalyticsFilters';
@@ -17,7 +17,9 @@ export default function AppLayout() {
   const { profile, logout } = useAuth();
   // Breadcrumb derivado del mismo catálogo que alimenta el sidebar.
   const location = useLocation();
-  const activeModule = navigation.find(item => item.path === location.pathname);
+  // El breadcrumb conserva la sección y etiqueta del módulo en subrutas de pestañas.
+  const activeModule = navigation.find(item => item.path === location.pathname ||
+    (item.path !== '/' && location.pathname.startsWith(`${item.path}/`)));
   const sectionLabel = activeModule?.section === 'gestion' ? 'Administración' : 'Exploración';
 
   // Permite cerrar el menú con Escape o al pulsar fuera, también en móvil.
@@ -110,10 +112,6 @@ export default function AppLayout() {
                     <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-soft">Rol asignado</p>
                     <p className="mt-1 text-sm font-medium text-main">{displayRole(profile?.role)}</p>
                   </div>
-                  <Link role="menuitem" to="/mis-notificaciones" onClick={() => setProfileOpen(false)}
-                    className="mt-1 flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm text-main transition-colors hover:bg-panel-alt">
-                    <BellRing size={17} className="text-muted"/> Mis notificaciones
-                  </Link>
                   <button type="button" role="menuitem" onClick={() => { setProfileOpen(false); void logout(); }}
                     className="mt-1 flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm text-main transition-colors hover:bg-panel-alt focus-visible:outline-2 focus-visible:outline-accent">
                     <LogOut size={17} className="text-muted" aria-hidden="true" /> Cerrar sesión

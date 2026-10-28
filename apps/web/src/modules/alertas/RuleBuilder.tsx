@@ -73,9 +73,19 @@ export default function RuleBuilder({onCreated}:{onCreated:()=>void}) {
         <label className="block text-xs font-semibold text-main">Nombre de la regla
           <input required minLength={3} maxLength={120} className={`${inputClass} mt-1`} placeholder="Ej. Avisos por correo M3.5" value={name} onChange={e=>setName(e.target.value)}/>
         </label>
-        <label className="block text-xs font-semibold text-main">Magnitud mínima
-          <input required type="number" step="0.1" min="0" max="10" className={`${inputClass} mt-1`} value={magnitude} onChange={e=>setMagnitude(e.target.value)}/>
+        {/* En escritorio, el valor exacto se presenta a la derecha del nombre. */}
+        <label className="block min-w-0 text-xs font-semibold text-main">Valor exacto M ≥
+          <input aria-label="Valor exacto de magnitud mínima" required type="number" step="0.1" min="0" max="10"
+            className={`${inputClass} mt-1 tabular-nums`} value={magnitude} onChange={e=>setMagnitude(e.target.value)}/>
         </label>
+        <div className="min-w-0 space-y-2 sm:col-span-2">
+          <label htmlFor="regla-magnitud" className="block text-xs font-semibold text-main">Magnitud mínima</label>
+          {/* Un mismo valor gobierna el control deslizante y el campo numérico. */}
+          <input id="regla-magnitud" type="range" min="0" max="10" step="0.1"
+            aria-label="Magnitud mínima de la regla" className="w-full cursor-pointer accent-accent"
+            value={magnitude} onChange={e=>setMagnitude(Number(e.target.value).toFixed(1))}/>
+          <div className="flex justify-between text-[11px] text-muted"><span>M 0.0</span><span>M 10.0</span></div>
+        </div>
         <label className="block text-xs font-semibold text-main">Fuente verificable
           <select disabled className={`${inputClass} mt-1 opacity-75`} value="IGP/CENSIS"><option value="IGP/CENSIS">IGP/CENSIS (Perú)</option></select>
         </label>
@@ -134,7 +144,7 @@ export default function RuleBuilder({onCreated}:{onCreated:()=>void}) {
       {error && <p role="alert" className="rounded-lg border border-rose-400 p-3 text-sm text-rose-600 dark:text-rose-300">{error}</p>}
       {message && <p role="status" className="rounded-lg border border-border-ui bg-panel-alt p-3 text-sm text-main">{message}</p>}
       <div className="flex flex-wrap items-center gap-3">
-        <button disabled={busy} type="submit" className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy ? <LoadingSpinner size="sm" variant="inline" label="Guardando…" /> : <><ShieldCheck size={16}/>Crear regla desactivada</>}</button>
+        <button disabled={busy} type="submit" className="inline-flex items-center gap-2 rounded-lg border border-zinc-900 bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-200 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-white">{busy ? <LoadingSpinner size="sm" variant="inline" label="Guardando…" /> : <><ShieldCheck size={16}/>Crear regla desactivada</>}</button>
         <span className="text-xs text-muted">No activa reglas ni genera avisos históricos.</span>
       </div>
   </form>;

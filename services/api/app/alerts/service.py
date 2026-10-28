@@ -282,106 +282,276 @@ def evaluate(engine, *, now: datetime | None = None, max_events: int = 1000) -> 
 
 def review(engine, *, alert_id: UUID, actor_email: str, approve: bool,
            now: datetime | None = None) -> None:
+    """Revisión por transición atómica: dos operadores no pueden aprobar/cancelar a la vez."""
     now = _now(now)
     with engine.begin() as conn:
         actor_id = _actor(conn, actor_email)
-        current = conn.execute(select(alerts.c.status).where(alerts.c.id == alert_id)).scalar_one_or_none()
-        if current != 'pending':
-            raise ValueError('Solo se pueden revisar alertas pendientes')
         new_status = 'approved' if approve else 'cancelled'
-        conn.execute(update(alerts).where(alerts.c.id == alert_id).values(
+        # El estado pendiente es parte del UPDATE, no una comprobación previa vulnerable.
+        changed = conn.execute(update(alerts).where(
+            alerts.c.id == alert_id, alerts.c.status == 'pending',
+        ).values(
             status=new_status, approved_by=actor_id if approve else None,
             approved_at=now if approve else None,
-        ))
+        ).returning(alerts.c.id)).scalar_one_or_none()
+        if changed is None:
+            raise ValueError('Solo se pueden revisar alertas pendientes')
         if not approve:
-            conn.execute(update(deliveries).where(deliveries.c.alert_id == alert_id).values(status='cancelled'))
+            conn.execute(update(deliveries).where(
+                deliveries.c.alert_id == alert_id, deliveries.c.status == 'pending',
+            ).values(status='cancelled', next_attempt_at=None))
         _audit(conn, action='alert.approved' if approve else 'alert.cancelled',
                table='alerts', entity_id=alert_id, actor_id=actor_id,
-               before={'status': current}, after={'status': new_status})
+               before={'status': 'pending'}, after={'status': new_status})
+
+
+class SMTPBeforeSubmissionError(RuntimeError):
+    """Error comprobado ANTES de pasar el mensaje al servidor SMTP; permite reintento."""
+
+
+# Usamos las columnas existentes: no se añaden estados fuera del CHECK de Supabase.
+# Una reserva de correo queda status=failed + error_code=SMTP_OUTCOME_UNKNOWN,
+# next_attempt_at=NULL. Si muere el proceso, NO se reintenta automáticamente:
+# el servidor SMTP puede haber aceptado el mensaje antes de perder la conexión.
+SMTP_OUTCOME_UNKNOWN = 'SMTP_OUTCOME_UNKNOWN'
+SMTP_SEND_FAILED = 'SMTP_SEND_FAILED'
 
 
 def _send_email(destination: str, subject: str, body: str) -> None:
-    """SMTP opcional; secretos solo mediante variables privadas del operador."""
-    host, sender = os.getenv('ALERT_SMTP_HOST'), os.getenv('ALERT_SMTP_FROM')
-    if not host or not sender:
-        raise RuntimeError('SMTP_NOT_CONFIGURED')
-    msg = EmailMessage()
-    msg['From'], msg['To'], msg['Subject'] = sender, destination, subject
-    msg.set_content(body)
-    port = int(os.getenv('ALERT_SMTP_PORT', '465'))
-    with smtplib.SMTP_SSL(host, port, timeout=10) as client:
-        username = os.getenv('ALERT_SMTP_USER')
-        if username:
-            client.login(username, os.environ['ALERT_SMTP_PASSWORD'])
+    """Transporte SMTP: diferencia fallos previos de resultados ambiguos.
+
+    Si send_message lanza una excepción, pudo haber sido aceptado por SMTP:
+    NO se asume que sea seguro reenviar el mismo mensaje automáticamente.
+    """
+    host = os.getenv('ALERT_SMTP_HOST')
+    sender = os.getenv('ALERT_SMTP_FROM')
+    user = os.getenv('ALERT_SMTP_USER')
+    password = os.getenv('ALERT_SMTP_PASSWORD')
+    if not host or not sender or (user and not password):
+        raise SMTPBeforeSubmissionError('SMTP_NOT_CONFIGURED')
+    try:
+        msg = EmailMessage()
+        msg['From'], msg['To'], msg['Subject'] = sender, destination, subject
+        msg.set_content(body)
+        port = int(os.getenv('ALERT_SMTP_PORT', '465'))
+        client = smtplib.SMTP_SSL(host, port, timeout=10)
+    except Exception as exc:
+        # El cliente aún no entregó ningún mensaje al servidor.
+        raise SMTPBeforeSubmissionError('SMTP_CONNECTION_FAILED') from exc
+    try:
+        try:
+            if user:
+                client.login(user, password)
+        except Exception as exc:
+            raise SMTPBeforeSubmissionError('SMTP_AUTH_FAILED') from exc
+        # Desde este punto no podemos probar que una excepción signifique
+        # no aceptación del mensaje: resultado incierto, revisión manual.
         client.send_message(msg)
+    finally:
+        # Fallar al cerrar SMTP después de un 250 no debe reenviar el correo.
+        try:
+            client.quit()
+        except Exception:
+            pass
+
+
+def _eligible_delivery(now: datetime):
+    """Elegibilidad reutilizada en SELECT y reserva CAS, siempre bajo las reglas IGP."""
+    # failed solo es reintentable si el fallo ocurrió antes de la entrega SMTP
+    # y se programó explícitamente un próximo intento.
+    retry_due = and_(
+        deliveries.c.status == 'failed',
+        deliveries.c.error_code == SMTP_SEND_FAILED,
+        deliveries.c.next_attempt_at.is_not(None),
+        deliveries.c.next_attempt_at <= now,
+    )
+    pending_due = and_(
+        deliveries.c.status == 'pending',
+        or_(deliveries.c.next_attempt_at.is_(None), deliveries.c.next_attempt_at <= now),
+    )
+    valid_alert = select(alerts.c.id).select_from(
+        alerts.join(alert_rules, alerts.c.rule_id == alert_rules.c.id)
+              .join(events, alerts.c.event_id == events.c.id)
+              .join(sources, events.c.source_id == sources.c.id)
+    ).where(
+        alerts.c.id == deliveries.c.alert_id,
+        alerts.c.status.in_(['approved', 'failed']),
+        alert_rules.c.enabled.is_(True),
+        alert_rules.c.channel == deliveries.c.channel,
+        sources.c.name == 'IGP/CENSIS',
+        alert_rules.c.source_id == events.c.source_id,
+        # El canal email exige revisión humana incluso para datos antiguos.
+        or_(deliveries.c.channel == 'in_app', and_(
+            alert_rules.c.requires_approval.is_(True),
+            alerts.c.approved_by.is_not(None), alerts.c.approved_at.is_not(None),
+        )),
+    ).exists()
+    return and_(deliveries.c.attempts < MAX_ATTEMPTS, or_(pending_due, retry_due), valid_alert)
 
 
 def dispatch(engine, *, now: datetime | None = None, send_email: bool = False,
              mailer=None) -> dict:
-    """Canal in_app publica en el centro; email solo con --send-email explícito.
+    """Reserva transaccional ANTES de SMTP y cero reenvíos de resultado incierto.
 
-    Los reintentos (máximo 3) utilizan backoff y no exponen detalles SMTP.
+    La transición condicional UPDATE...RETURNING es un CAS en PostgreSQL:
+    dos workers que seleccionen el mismo ID solo pueden reservarlo una vez.
+    La reserva se confirma antes de llamar a un sistema externo. Un crash
+    posterior deja SMTP_OUTCOME_UNKNOWN, que exige reconciliación manual.
     """
     now = _now(now)
-    delivered = failed = 0
-    mailer = mailer or _send_email
+    sent = failed = uncertain = 0
+    # Fase D: cuando GitHub Actions ejecuta una prueba manual, el servidor
+    # permite enviar ÚNICAMENTE al destinatario de prueba autorizado.
+    # La protección es del backend (SELECT y UPDATE CAS), nunca solo del YAML.
+    test_mode = send_email and os.getenv('OPERATIONAL_EMAIL_TEST_MODE', '').lower() == 'true'
+    test_destination = os.getenv('OPERATIONAL_EMAIL_TEST_RECIPIENT', '').strip().lower()
+    if test_mode and not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', test_destination):
+        raise ValueError('Falta destinatario válido para prueba operativa')
+    destination_guard = (
+        and_(deliveries.c.channel == 'email',
+             func.lower(deliveries.c.destination_ref) == test_destination)
+        if test_mode else None
+    )
+    # Transporte inyectado exclusivamente para pruebas deterministas; se
+    # contrata que el fake eleva excepciones solo si NO efectuó la entrega.
+    injected = mailer is not None
+    mailer = mailer if mailer is not None else _send_email
     with engine.connect() as conn:
-        items = conn.execute(select(deliveries, alerts.c.title, alerts.c.message, alerts.c.status.label('alert_status'))
-            .select_from(deliveries.join(alerts, deliveries.c.alert_id == alerts.c.id))
-            .where(deliveries.c.status.in_(['pending', 'failed']), alerts.c.status.in_(['approved', 'failed']),
-                   deliveries.c.attempts < MAX_ATTEMPTS)
-            .order_by(deliveries.c.created_at.asc()).limit(200)).mappings().all()
-    for item in items:
-        d = dict(item)
-        if d['next_attempt_at'] and _aware(d['next_attempt_at']) > now:
-            continue
-        if d['channel'] == 'email' and not send_email:
-            continue
-        error = None
-        try:
-            if d['channel'] == 'email':
-                mailer(d['destination_ref'], d['title'], d['message'])
-            elif d['channel'] != 'in_app':
-                raise RuntimeError('UNKNOWN_CHANNEL')
-        except Exception:
-            # No persistir credenciales, excepciones SMTP ni direcciones privadas.
-            error = 'SMTP_SEND_FAILED' if d['channel'] == 'email' else 'DELIVERY_FAILED'
+        # Excluir email ANTES del LIMIT: miles de correos pendientes no deben
+        # impedir que se publiquen entregas in_app en modo seguro por defecto.
+        candidates = select(deliveries.c.id).where(_eligible_delivery(now))
+        if destination_guard is not None:
+            candidates = candidates.where(destination_guard)
+        if not send_email:
+            candidates = candidates.where(deliveries.c.channel != 'email')
+        # La prueba manual procesa como máximo UNA entrega aprobada por ejecución.
+        # El cron ordinario conserva su lote de 200 entregas internas.
+        candidate_ids = conn.execute(candidates
+            .order_by(deliveries.c.created_at.asc(), deliveries.c.id.asc())
+            .limit(1 if test_mode else 200)).scalars().all()
+
+    for delivery_id in candidate_ids:
+        # Mantener los correos completamente desactivados si no se usó
+        # --send-email. El canal in_app permanece operativo.
         with engine.begin() as conn:
-            if engine.dialect.name == 'postgresql':
-                conn.execute(text('SELECT pg_advisory_xact_lock(20261023, 78)'))
-            current = conn.execute(select(deliveries.c.status, deliveries.c.attempts)
-                .where(deliveries.c.id == d['id'])).first()
-            if not current or current.status not in ('pending', 'failed') or current.attempts >= MAX_ATTEMPTS:
+            # Filtro sin efectos secundarios si la entrega fue reservada por otro worker.
+            if not send_email:
+                is_email = conn.execute(select(deliveries.c.channel).where(
+                    deliveries.c.id == delivery_id)).scalar_one_or_none() == 'email'
+                if is_email:
+                    continue
+            claim_conditions = [deliveries.c.id == delivery_id, _eligible_delivery(now)]
+            # Evita TOCTOU si el destino cambia mientras esperamos una reserva.
+            if destination_guard is not None:
+                claim_conditions.append(destination_guard)
+            claimed = conn.execute(update(deliveries).where(
+                *claim_conditions,
+            ).values(
+                status='failed',
+                attempts=deliveries.c.attempts + 1,
+                last_attempt_at=now,
+                next_attempt_at=None,
+                error_code=SMTP_OUTCOME_UNKNOWN,
+            ).returning(
+                deliveries.c.id, deliveries.c.alert_id, deliveries.c.channel,
+                deliveries.c.destination_ref, deliveries.c.attempts,
+            )).mappings().first()
+            if not claimed:
                 continue
-            attempts = current.attempts + 1
-            if error:
-                conn.execute(update(deliveries).where(deliveries.c.id == d['id']).values(
-                    status='failed', attempts=attempts, last_attempt_at=now,
-                    next_attempt_at=now + timedelta(seconds=60 * (2 ** (attempts - 1))) if attempts < MAX_ATTEMPTS else None,
-                    error_code=error,
-                ))
-                conn.execute(update(alerts).where(alerts.c.id == d['alert_id']).values(status='failed'))
-                failed += 1
-            else:
-                conn.execute(update(deliveries).where(deliveries.c.id == d['id']).values(
-                    status='sent', attempts=attempts, last_attempt_at=now,
-                    next_attempt_at=None, delivered_at=now, error_code=None,
+            d = dict(claimed)
+            # El canal interno no requiere efecto externo; se confirma en
+            # la misma transacción de la reserva.
+            if d['channel'] == 'in_app':
+                conn.execute(update(deliveries).where(deliveries.c.id == delivery_id).values(
+                    status='sent', delivered_at=now, error_code=None,
                 ))
                 conn.execute(update(alerts).where(alerts.c.id == d['alert_id']).values(status='sent'))
-                delivered += 1
-            _audit(conn, action='alert.delivery.failed' if error else 'alert.delivery.sent',
-                   table='alert_deliveries', entity_id=d['id'],
-                   after={'channel': d['channel'], 'attempts': attempts, 'status': 'failed' if error else 'sent'})
-    return {'sent': delivered, 'failed': failed, 'email_enabled': send_email}
+                _audit(conn, action='alert.delivery.sent', table='alert_deliveries',
+                       entity_id=delivery_id, after={
+                           'channel': 'in_app', 'attempts': d['attempts'], 'status': 'sent',
+                       })
+                sent += 1
+                continue
+            # En producción se espera solo email o in_app; ante datos
+            # corruptos bloquear, jamás intentar un transporte desconocido.
+            if d['channel'] != 'email':
+                _audit(conn, action='alert.delivery.uncertain', table='alert_deliveries',
+                       entity_id=delivery_id, after={'channel': 'unknown', 'status': 'review_required'})
+                uncertain += 1
+                continue
+            # El commit ocurre AL SALIR de este with, ANTES del SMTP.
+            _audit(conn, action='alert.delivery.claimed', table='alert_deliveries',
+                   entity_id=delivery_id, after={
+                       'channel': 'email', 'attempts': d['attempts'], 'status': 'reserved',
+                   })
+
+        # Obtener contenido SOLO para una entrega reservada y autorizada.
+        # Si falla la consulta previa a SMTP, el resultado permanece incierto
+        # pero no se envía nada sin tener título/mensaje verificables.
+        try:
+            with engine.connect() as conn:
+                content = conn.execute(select(alerts.c.title, alerts.c.message)
+                    .where(alerts.c.id == d['alert_id'])).first()
+            if content is None:
+                raise SMTPBeforeSubmissionError('ALERT_MISSING')
+            mailer(d['destination_ref'], content.title, content.message)
+            mail_error = None
+        except Exception as exc:
+            # La implementación real diferencia fallos antes del envío.
+            # Los fakes usados en tests representan rechazos sin entrega.
+            safe_retry = isinstance(exc, SMTPBeforeSubmissionError) or injected
+            mail_error = SMTP_SEND_FAILED if safe_retry else SMTP_OUTCOME_UNKNOWN
+
+        with engine.begin() as conn:
+            # No sobrescribir un estado editado por una reconciliación manual.
+            values = (
+                {'status': 'sent', 'delivered_at': now, 'next_attempt_at': None, 'error_code': None}
+                if mail_error is None else
+                {'status': 'failed', 'next_attempt_at':
+                 now + timedelta(seconds=60 * (2 ** (d['attempts'] - 1)))
+                 if mail_error == SMTP_SEND_FAILED and d['attempts'] < MAX_ATTEMPTS else None,
+                 'error_code': mail_error}
+            )
+            updated = conn.execute(update(deliveries).where(
+                deliveries.c.id == delivery_id,
+                deliveries.c.status == 'failed',
+                deliveries.c.error_code == SMTP_OUTCOME_UNKNOWN,
+                deliveries.c.attempts == d['attempts'],
+            ).values(**values).returning(deliveries.c.id)).scalar_one_or_none()
+            if updated is None:
+                # Si otra operación modificó la reserva, no afirmar resultado.
+                continue
+            conn.execute(update(alerts).where(alerts.c.id == d['alert_id']).values(
+                status='sent' if mail_error is None else 'failed'))
+            audit_action = ('alert.delivery.sent' if mail_error is None else
+                            'alert.delivery.failed' if mail_error == SMTP_SEND_FAILED else
+                            'alert.delivery.uncertain')
+            _audit(conn, action=audit_action, table='alert_deliveries',
+                   entity_id=delivery_id, after={
+                       'channel': 'email', 'attempts': d['attempts'],
+                       'status': 'sent' if mail_error is None else
+                       'retry_scheduled' if mail_error == SMTP_SEND_FAILED else 'review_required',
+                   })
+            if mail_error is None:
+                sent += 1
+            elif mail_error == SMTP_SEND_FAILED:
+                failed += 1
+            else:
+                uncertain += 1
+
+    return {'sent': sent, 'failed': failed, 'uncertain': uncertain,
+            'email_enabled': send_email}
 
 
 def acknowledge(engine, *, delivery_id: UUID, actor_email: str, now: datetime | None = None) -> None:
-    """Acuse MANUAL de un operador: no confirma recepción por un usuario final."""
+    """Acuse MANUAL único de operador; no certifica lectura de correo del receptor."""
     with engine.begin() as conn:
         actor_id = _actor(conn, actor_email)
-        current = conn.execute(select(deliveries.c.status).where(deliveries.c.id == delivery_id)).scalar_one_or_none()
-        if current != 'sent':
-            raise ValueError('Solo se puede acusar una entrega publicada')
-        conn.execute(update(deliveries).where(deliveries.c.id == delivery_id).values(acknowledged_at=_now(now)))
+        changed = conn.execute(update(deliveries).where(
+            deliveries.c.id == delivery_id, deliveries.c.status == 'sent',
+            deliveries.c.acknowledged_at.is_(None),
+        ).values(acknowledged_at=_now(now)).returning(deliveries.c.id)).scalar_one_or_none()
+        if changed is None:
+            raise ValueError('Solo se puede acusar una entrega publicada sin acuse previo')
         _audit(conn, action='alert.delivery.acknowledged', table='alert_deliveries',
                entity_id=delivery_id, actor_id=actor_id)

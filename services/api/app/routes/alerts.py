@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.auth.security import Principal, require_user
+from app.auth.security import Principal, require_roles, require_user
 from app.db.session import get_read_engine
 from app.db.tables import alert_rules, alerts, deliveries, events, sources, users
 
@@ -83,3 +83,74 @@ def list_alerts(page: int = Query(1, ge=1), page_size: int = Query(5, ge=1, le=1
     return {'items': [{**dict(row), 'delivery': by_alert.get(row['id'])} for row in rows],
             'page': page, 'page_size': page_size, 'total': total,
             'disclaimer': 'Avisos informativos posteriores al evento. No son alertas oficiales ni tempranas.'}
+
+
+# Los errores SMTP crudos nunca se publican; son datos operativos y pueden incluir
+# nombres de cuenta, servidores, direcciones o información de autenticación.
+SAFE_DELIVERY_ERRORS = frozenset({'SMTP_SEND_FAILED', 'DELIVERY_FAILED', 'SMTP_NOT_CONFIGURED', 'UNKNOWN_CHANNEL', 'SMTP_OUTCOME_UNKNOWN'})
+
+
+def _delivery_destination(channel: str, destination: str | None) -> str:
+    """Presentación privada del destinatario: ni operadores ni auditores reciben el email completo."""
+    if channel == 'in_app':
+        return 'Centro interno'
+    if channel != 'email' or not destination or destination.count('@') != 1:
+        return 'Destino protegido'
+    local, domain = destination.split('@', 1)
+    if not local or not domain or ' ' in domain or '.' not in domain:
+        return 'Destino protegido'
+    return f'{local[0]}***@{domain}'
+
+
+@router.get('/alert-deliveries')
+def list_alert_deliveries(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(5, ge=1, le=20),
+    status: str | None = Query(None, pattern='^(pending|sent|failed|cancelled)$'),
+    channel: str | None = Query(None, pattern='^(in_app|email)$'),
+    actor: Principal = Depends(require_roles('administrador', 'operador_alertas', 'auditor')),
+    engine: Engine = Depends(get_read_engine),
+) -> dict:
+    """Entregas reales IGP/CENSIS, paginadas en SQL y limitadas a roles operativos.
+
+    No devuelve destination_ref, mensajes SMTP, secretos ni correos completos.
+    `sent` significa publicado en la aplicación o aceptado por SMTP, no leído.
+    """
+    relation = (deliveries.join(alerts, deliveries.c.alert_id == alerts.c.id)
+        .join(events, alerts.c.event_id == events.c.id)
+        .join(sources, events.c.source_id == sources.c.id)
+        .join(alert_rules, alerts.c.rule_id == alert_rules.c.id))
+    conditions = [sources.c.name == IGP_SOURCE]
+    if status:
+        conditions.append(deliveries.c.status == status)
+    if channel:
+        conditions.append(deliveries.c.channel == channel)
+    try:
+        with engine.connect() as conn:
+            total = conn.execute(select(func.count()).select_from(relation).where(*conditions)).scalar_one()
+            rows = conn.execute(select(
+                deliveries.c.id, deliveries.c.alert_id, deliveries.c.channel,
+                deliveries.c.destination_ref, deliveries.c.status, deliveries.c.attempts,
+                deliveries.c.created_at, deliveries.c.last_attempt_at,
+                deliveries.c.next_attempt_at, deliveries.c.delivered_at,
+                deliveries.c.acknowledged_at, deliveries.c.error_code,
+                alerts.c.title.label('alert_title'), alerts.c.status.label('alert_status'),
+                alerts.c.source_url, events.c.occurred_at, events.c.magnitude,
+                events.c.place, alert_rules.c.name.label('rule_name'),
+            ).select_from(relation).where(*conditions)
+                .order_by(deliveries.c.created_at.desc(), deliveries.c.id.desc())
+                .offset((page - 1) * page_size).limit(page_size)).mappings().all()
+    except SQLAlchemyError:
+        raise HTTPException(503, 'Historial de entregas no disponible') from None
+
+    items = []
+    for row in rows:
+        item = dict(row)
+        item['destination_display'] = _delivery_destination(item['channel'], item.pop('destination_ref'))
+        code = item['error_code']
+        item['error_code'] = code if code in SAFE_DELIVERY_ERRORS else ('ERROR_NO_CLASIFICADO' if code else None)
+        items.append(item)
+    return {
+        'items': items, 'total': total, 'page': page, 'page_size': page_size,
+        'disclaimer': 'Enviado significa publicación interna o aceptación SMTP; no confirma recepción ni lectura.',
+    }

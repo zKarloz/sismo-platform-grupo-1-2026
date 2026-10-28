@@ -12,6 +12,12 @@ on:
     - cron: '33 8 * * *'
   # Permite validar una ejecución desde la pestaña Actions.
   workflow_dispatch:
+    inputs:
+      test_operational_email:
+        description: 'Prueba controlada: enviar solo avisos aprobados al destinatario autorizado (requiere habilitación adicional)'
+        required: false
+        type: boolean
+        default: false
 
 # Solo leemos el repositorio: las escrituras son a PostgreSQL mediante secret.
 permissions:
@@ -97,7 +103,40 @@ jobs:
           # No realiza envíos externos ni salta aprobación humana.
           python -m app.commands.alerts dispatch
 
+      - name: Probar envío operativo de alertas aprobadas (solo manual)
+        # Fase D: no activar envíos operativos en el cron mientras el flujo
+        # personal sigue vigente. La ejecución exige input + variable explícitos.
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.test_operational_email == true && vars.ENABLE_OPERATIONAL_EMAIL == 'true' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ALERT_SMTP_HOST: ${{ secrets.ALERT_SMTP_HOST }}
+          ALERT_SMTP_PORT: ${{ vars.ALERT_SMTP_PORT || '465' }}
+          ALERT_SMTP_FROM: ${{ secrets.ALERT_SMTP_FROM }}
+          ALERT_SMTP_USER: ${{ secrets.ALERT_SMTP_USER }}
+          ALERT_SMTP_PASSWORD: ${{ secrets.ALERT_SMTP_PASSWORD }}
+          # La selección y reserva se limitan a este email en FastAPI.
+          OPERATIONAL_EMAIL_TEST_MODE: 'true'
+          OPERATIONAL_EMAIL_TEST_RECIPIENT: ${{ secrets.OPERATIONAL_EMAIL_TEST_RECIPIENT }}
+        run: |
+          set -euo pipefail
+          # Nunca volcar credenciales o la dirección privada en logs.
+          if [ -z "$OPERATIONAL_EMAIL_TEST_RECIPIENT" ]; then
+            echo '::error::Falta el secreto OPERATIONAL_EMAIL_TEST_RECIPIENT.'
+            exit 1
+          fi
+          if [ -z "$ALERT_SMTP_HOST" ] || [ -z "$ALERT_SMTP_FROM" ] || [ -z "$ALERT_SMTP_USER" ] || [ -z "$ALERT_SMTP_PASSWORD" ]; then
+            echo '::error::Faltan secretos SMTP para la prueba operativa.'
+            exit 1
+          fi
+          # Solo entrega reglas email activas y aprobadas, con destino autorizado.
+          python -m app.commands.alerts dispatch --send-email
+          echo '### Centro de alertas: prueba operativa ejecutada' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Revisar el resultado en Centro de alertas > Entregas. SMTP aceptado no equivale a lectura.' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Preparar avisos personales de cuentas suscritas
+        # Evitar dos tipos de correo en la misma ejecución de PRUEBA operativa.
+        # El cron personal ordinario sigue intacto hasta la Fase E.
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.test_operational_email == true) }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
@@ -105,6 +144,7 @@ jobs:
           python -m app.commands.personal_notifications evaluate
 
       - name: Enviar correos personales (solo con habilitación explícita)
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.test_operational_email == true) }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ENABLE_PERSONAL_EMAIL: ${{ vars.ENABLE_PERSONAL_EMAIL }}

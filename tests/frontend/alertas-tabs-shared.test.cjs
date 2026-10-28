@@ -10,12 +10,12 @@ const personal = read('apps/web/src/modules/mis-notificaciones/Page.tsx');
 const api = read('apps/web/src/services/alerts.ts');
 const backend = read('services/api/app/routes/alerts.py');
 
-test('centro, reglas y canales son pestañas del módulo administrativo', () => {
-  for (const name of ['Centro de alertas', 'Reglas', 'Canales']) assert.ok(operational.includes(name));
-  assert.match(operational,/role="tablist"/);
-  assert.match(operational,/tab === 'centro'/);
+test('bandeja, reglas y entregas son vistas con rutas propias', () => {
+  for (const name of ['Bandeja', 'Reglas', 'Entregas']) assert.ok(operational.includes(name));
+  assert.match(operational,/useLocation\(\)/);
+  assert.match(operational,/tab === 'bandeja'/);
   assert.match(operational,/tab === 'reglas'/);
-  assert.match(operational,/tab === 'canales'/);
+  assert.match(operational,/tab === 'entregas'/);
 });
 test('preferencias e historial usan paginación común', () => {
   assert.match(personal,/label:'Preferencias'/);
@@ -33,7 +33,9 @@ test('simulación no utiliza la operación de creación de alertas', () => {
 test('lecturas requieren sesión y fuente IGP', () => {
   assert.match(backend,/Depends\(require_user\)/);
   assert.match(backend,/IGP_SOURCE = 'IGP\/CENSIS'/);
-  assert.doesNotMatch(backend,/destination_ref/);
+  // La Fase B lee el destino exclusivamente para devolver una representación anonimizada.
+  assert.match(backend, /item\.pop\('destination_ref'\)/);
+  assert.match(backend, /_delivery_destination/);
 });
 test('no hay textos de fase o versión en el módulo', () => {
   assert.doesNotMatch(operational,/Fase 7|V2/);

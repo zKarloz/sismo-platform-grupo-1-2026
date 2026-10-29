@@ -17,3 +17,6 @@
 .DS_Store
 .vscode/settings.json
 /*.zip
+
+# Respaldos locales de interfaz
+.ui-polish-backups/

@@ -107,7 +107,7 @@ function MetricInfo({ metricKey }: { metricKey: MetricHelpKey }) {
     <button ref={trigger} type="button" onClick={toggle} aria-label={`Información de ${metricKey === 'macro_f1' ? 'F1 macro' : metricKey.toUpperCase()}`}
       aria-expanded={open} aria-controls={open ? infoId : undefined}
       className="ml-1 inline-flex rounded-full p-0.5 text-muted hover:bg-panel-alt hover:text-main focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
-      <Info size={14} aria-hidden="true"/>
+      <Info size={14} aria-hidden="true" />
     </button>
     {open && createPortal(<div ref={card} id={infoId} role="tooltip"
       style={{ top: point.top, left: point.left }}
@@ -122,9 +122,9 @@ function MetricInfo({ metricKey }: { metricKey: MetricHelpKey }) {
  */
 function ComparisonColumns() {
   return <colgroup>
-    <col className="w-[19%]"/><col className="w-[14%]"/><col className="w-[9%]"/>
-    <col className="w-[10%]"/><col className="w-[13%]"/><col className="w-[10%]"/>
-    <col className="w-[15%]"/><col className="w-[10%]"/>
+    <col className="w-[19%]" /><col className="w-[14%]" /><col className="w-[9%]" />
+    <col className="w-[10%]" /><col className="w-[13%]" /><col className="w-[10%]" />
+    <col className="w-[15%]" /><col className="w-[10%]" />
   </colgroup>;
 }
 function ComparisonHeader() {
@@ -154,7 +154,7 @@ function ComparisonTooltip({ active, payload, label }: {
   return <div className="pointer-events-none rounded-xl border border-border-ui bg-panel p-3 text-xs text-main shadow-xl">
     <p className="mb-2 font-semibold text-main">{isDate ? `Fecha y hora: ${date(value)}` : value}</p>
     {payload.map((entry, index) => <p key={`${entry.name ?? 'dato'}-${index}`} className="mt-1 text-main">
-      <span className="mr-1 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: entry.color ?? 'var(--ui-accent)' }}/>
+      <span className="mr-1 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: entry.color ?? 'var(--ui-accent)' }} />
       {entry.name ?? 'Valor'}: <strong className="tabular-nums">{typeof entry.value === 'number' ? number(entry.value) : String(entry.value ?? '—')}</strong>
     </p>)}
   </div>;
@@ -164,8 +164,8 @@ function ComparisonTooltip({ active, payload, label }: {
 function ClassificationEvidence({ metrics, period }: { metrics: Experiment['metrics'] | undefined; period: 2024 | 2025 }) {
   if (!metrics?.confusion_matrix?.length) return <p className="text-xs text-muted">No hay matriz de confusión registrada para {period}.</p>;
   return <div className="space-y-4">
-    <div className="overflow-x-auto">
-      <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-main"><BarChart3 size={16}/> Matriz de confusión · {period}</h3>
+    <div className="overflow-x-auto ui-thin-scrollbar">
+      <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-main"><BarChart3 size={16} /> Matriz de confusión · {period}</h3>
       <p className="mb-3 text-xs text-muted">Filas: clase real · Columnas: clase estimada. Evaluación retrospectiva IGP.</p>
       <table className="w-full text-sm text-main">
         <thead><tr><th className="p-2 text-left">Real / Estimada</th>{metrics.labels?.map(label => <th key={label} className="p-2 text-center text-xs">{label}</th>)}</tr></thead>
@@ -174,8 +174,8 @@ function ClassificationEvidence({ metrics, period }: { metrics: Experiment['metr
     </div>
     {metrics.per_class && <section className="space-y-2">
       <h3 className="text-sm font-semibold text-main">Métricas por clase · {period}</h3>
-      <div className="overflow-x-auto"><table className="w-full text-left text-sm text-main">
-        <thead><tr className="border-b border-border-ui text-xs text-muted"><th className="p-2">Clase observada</th><th className="p-2">Precisión<MetricInfo metricKey="precision"/></th><th className="p-2">Recall<MetricInfo metricKey="recall"/></th><th className="p-2">F1<MetricInfo metricKey="f1"/></th></tr></thead>
+      <div className="overflow-x-auto ui-thin-scrollbar"><table className="w-full text-left text-sm text-main">
+        <thead><tr className="border-b border-border-ui text-xs text-muted"><th className="p-2">Clase observada</th><th className="p-2">Precisión<MetricInfo metricKey="precision" /></th><th className="p-2">Recall<MetricInfo metricKey="recall" /></th><th className="p-2">F1<MetricInfo metricKey="f1" /></th></tr></thead>
         <tbody>{(metrics.labels ?? []).map(label => {
           const values = metrics.per_class?.[label];
           if (!values || typeof values === 'number') return null;
@@ -206,8 +206,8 @@ function comparisonScore(model: Experiment, reference?: Experiment) {
 /** CSV del resumen agregado: una línea por modelo, sin confundir con 2.224 sismos. */
 function exportEstimateSummaryCsv(summary: EstimateSummary) {
   const values = [['modelo', 'objetivo', 'tipo', 'estimaciones', 'metrica', 'valor'],
-    ...summary.models.map(row => [row.algorithm, row.target_name, row.task_type,
-      row.total, row.primary_metric, row.primary_value])];
+  ...summary.models.map(row => [row.algorithm, row.target_name, row.task_type,
+  row.total, row.primary_metric, row.primary_value])];
   const csv = values.map(line => line.map(value => {
     const clean = String(value ?? '').replaceAll('"', '""');
     return `"${typeof value === 'string' && /^[\s]*[=+@-]/.test(clean) ? "'" + clean : clean}"`;
@@ -226,8 +226,8 @@ function exportEstimateCsv(items: RetrospectiveEstimate[]) {
     'fecha_evento_utc', 'latitud', 'longitud', 'observado', 'estimado', 'error_observado',
     'revision', 'registrado_experimento', 'advertencia'];
   const rows = items.map(item => [item.experiment_id, item.dataset_name, item.dataset_version,
-    item.algorithm, item.target_name, item.source_row, item.occurred_at, item.latitude,
-    item.longitude, item.actual_value, item.predicted_value, item.absolute_error,
+  item.algorithm, item.target_name, item.source_row, item.occurred_at, item.latitude,
+  item.longitude, item.actual_value, item.predicted_value, item.absolute_error,
     'Sin revisión registrada', item.experiment_registered_at, item.warning]);
   const csv = [header, ...rows].map(line => line.map(value => {
     const clean = String(value ?? '').replaceAll('"', '""');
@@ -245,8 +245,8 @@ function exportEstimateCsv(items: RetrospectiveEstimate[]) {
 function exportCsv(items: Experiment[]) {
   const header = ['dataset', 'version', 'ejecucion_id', 'algoritmo', 'objetivo', 'tipo', 'mae', 'rmse', 'r2', 'accuracy', 'f1_macro', 'fecha'];
   const rows = items.map(item => [item.dataset_name, item.dataset_version, item.batch_id, item.algorithm,
-    item.target_name, item.task_type, item.metrics.mae, item.metrics.rmse, item.metrics.r2,
-    item.metrics.accuracy, item.metrics.macro_f1, item.created_at]);
+  item.target_name, item.task_type, item.metrics.mae, item.metrics.rmse, item.metrics.r2,
+  item.metrics.accuracy, item.metrics.macro_f1, item.created_at]);
   const csv = [header, ...rows].map(values => values.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\r\n');
   const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
   const link = document.createElement('a'); link.href = url; link.download = 'modelos-ml-igp-pagina.csv'; link.click();
@@ -260,8 +260,8 @@ function exportFinalMetricsCsv(model: NonNullable<FinalEvaluationReport['models'
   reference: NonNullable<FinalEvaluationReport['models']>[number], batchId: string) {
   const keys = ['mae', 'rmse', 'r2', 'accuracy', 'macro_f1'] as const;
   const rows = [['periodo', 'batch_id', 'algoritmo', 'metrica', 'baseline', 'modelo'],
-    ...keys.filter(key => typeof model.metrics[key] === 'number')
-      .map(key => ['2025', batchId, model.algorithm, key, reference.metrics[key] ?? '', model.metrics[key] ?? ''])];
+  ...keys.filter(key => typeof model.metrics[key] === 'number')
+    .map(key => ['2025', batchId, model.algorithm, key, reference.metrics[key] ?? '', model.metrics[key] ?? ''])];
   const csv = rows.map(cells => cells.map(cell => `"${String(cell).replaceAll('"', '""')}"`).join(',')).join('\r\n');
   const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
   const link = document.createElement('a'); link.href = url;
@@ -272,8 +272,8 @@ function exportFinalMetricsCsv(model: NonNullable<FinalEvaluationReport['models'
 /** CSV de todos los pares observados de un único experimento, no métricas globales. */
 function exportPredictionCsv(rows: ValidationPrediction[], experimentId: string) {
   const values = [['experimento_id', 'fila_excel', 'fecha_utc', 'observado', 'estimado', 'particion'],
-    ...rows.map(row => [experimentId, row.source_row, row.occurred_at,
-      row.actual_value, row.predicted_value, 'validation_2024'])];
+  ...rows.map(row => [experimentId, row.source_row, row.occurred_at,
+    row.actual_value, row.predicted_value, 'validation_2024'])];
   const csv = values.map(line => line.map(v => `"${String(v).replaceAll('"', '""')}"`).join(',')).join('\r\n');
   const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
   const link = document.createElement('a'); link.href = url;
@@ -438,7 +438,7 @@ export default function Page() {
   // pero los 556 pares íntegros permanecen disponibles en tabla y CSV.
   const lines = currentModel?.task_type === 'regression' && predictionRows.length > 0
     ? predictionRows.filter((_, index) => index % Math.max(1, Math.ceil(predictionRows.length / 120)) === 0)
-        .map(row => ({ date: row.occurred_at, real: Number(row.actual_value), estimated: Number(row.predicted_value) }))
+      .map(row => ({ date: row.occurred_at, real: Number(row.actual_value), estimated: Number(row.predicted_value) }))
     : (currentModel?.metrics.real_vs_estimated ?? []);
   // Un CSV de Comparación siempre corresponde a los pares del modelo elegido.
   // Si están cargando o no existen, no exportamos por error la tabla de experimentos.
@@ -458,8 +458,8 @@ export default function Page() {
         <p className="mt-2 text-sm text-muted">Experimentos retrospectivos con catálogo IGP/CENSIS y validación de 2024 y prueba final independiente de 2025.</p>
       </div>
       <div className="flex flex-wrap items-center justify-end gap-2">
-        <button type="button" onClick={() => { setDraft(filters); setFilterOpen(true); }} className="inline-flex items-center gap-2 rounded-xl border border-border-ui bg-panel px-3 py-2 text-sm text-main hover:bg-panel-alt"><Filter size={16}/> Filtros</button>
-        <button type="button" onClick={() => setRevision(value => value + 1)} className="inline-flex items-center gap-2 rounded-xl border border-border-ui bg-panel px-3 py-2 text-sm text-main hover:bg-panel-alt"><RefreshCw size={16}/> Actualizar</button>
+        <button type="button" onClick={() => { setDraft(filters); setFilterOpen(true); }} className="inline-flex items-center gap-2 rounded-xl border border-border-ui bg-panel px-3 py-2 text-sm text-main hover:bg-panel-alt"><Filter size={16} /> Filtros</button>
+        <button type="button" onClick={() => setRevision(value => value + 1)} className="inline-flex items-center gap-2 rounded-xl border border-border-ui bg-panel px-3 py-2 text-sm text-main hover:bg-panel-alt"><RefreshCw size={16} /> Actualizar</button>
         <button type="button" disabled={!canExport}
           onClick={() => {
             if (tab === 'comparacion' && graphPeriod === 2025 && finalReport && finalModel && finalBaseline) {
@@ -472,12 +472,12 @@ export default function Page() {
               if (showEstimateRows && estimates) exportEstimateCsv(estimates.items);
               else if (estimateSummary) exportEstimateSummaryCsv(estimateSummary);
             }
-          }} className="inline-flex items-center gap-2 rounded-xl border border-border-ui bg-panel px-3 py-2 text-sm text-main hover:bg-panel-alt disabled:opacity-40"><Download size={16}/> CSV</button>
+          }} className="inline-flex items-center gap-2 rounded-xl border border-border-ui bg-panel px-3 py-2 text-sm text-main hover:bg-panel-alt disabled:opacity-40"><Download size={16} /> CSV</button>
       </div>
     </header>
 
     <section className="flex gap-3 rounded-xl border border-border-ui bg-panel px-4 py-3">
-      <ShieldAlert size={20} className="mt-0.5 shrink-0 text-accent"/>
+      <ShieldAlert size={20} className="mt-0.5 shrink-0 text-accent" />
       <p className="text-sm text-muted"><strong className="text-main">Estimaciones experimentales, no predicciones sísmicas.</strong> Los modelos explican características de eventos ya observados; no anticipan terremotos ni generan alertas oficiales. El año 2025 pertenece a una prueba final independiente; solo se muestra cuando esté registrada.</p>
     </section>
 
@@ -490,12 +490,12 @@ export default function Page() {
     {loading && <div className="rounded-xl border border-border-ui bg-panel"><LoadingSpinner label="Consultando experimentos IGP…" /></div>}
     {error && <p role="alert" className="rounded-xl border border-rose-500 p-4 text-sm text-rose-600 dark:text-rose-300">{error}. Comprueba la migración ML y el despliegue de FastAPI.</p>}
     {!loading && !error && tab === 'experimentos' && <section className="overflow-hidden rounded-xl border border-border-ui bg-panel">
-      {!result?.items.length ? <div className="p-8 text-center"><FlaskConical size={28} className="mx-auto text-accent"/><p className="mt-3 font-semibold text-main">Todavía no hay experimentos IGP registrados</p><p className="mt-2 text-sm text-muted">Valida primero el snapshot y entrena desde la CLI autorizada. Los experimentos USGS antiguos permanecen archivados.</p></div>
-        : <div className="overflow-x-auto p-4"><table className="w-full min-w-[750px] text-left text-sm">
+      {!result?.items.length ? <div className="p-8 text-center"><FlaskConical size={28} className="mx-auto text-accent" /><p className="mt-3 font-semibold text-main">Todavía no hay experimentos IGP registrados</p><p className="mt-2 text-sm text-muted">Valida primero el snapshot y entrena desde la CLI autorizada. Los experimentos USGS antiguos permanecen archivados.</p></div>
+        : <div className="overflow-x-auto p-4 ui-thin-scrollbar"><table className="w-full min-w-[750px] text-left text-sm">
           <thead className="border-b border-border-ui text-xs text-muted"><tr><th className="py-3 pr-3">Algoritmo</th><th className="py-3 pr-3">Objetivo</th><th className="py-3 pr-3">Muestra</th><th className="py-3 pr-3">F1 macro</th><th className="py-3 pr-3">MAE</th><th className="py-3 pr-3">RMSE</th><th className="py-3 pr-3">R²</th><th className="py-3">Registro</th></tr></thead>
           <tbody>{result.items.map(row => <tr key={row.id} className="border-b border-border-ui/60 text-main"><td className="py-3 pr-3"><span className="font-medium">{algorithmName(row.algorithm)}</span>{row.params.baseline === true && <span className="ml-2 text-xs text-muted">Baseline</span>}</td><td className="py-3 pr-3">{target(row.target_name)}</td><td className="py-3 pr-3 text-muted">{task(row)}</td><td className="py-3 pr-3 tabular-nums">{percent(row.metrics.macro_f1)}</td><td className="py-3 pr-3 tabular-nums">{number(row.metrics.mae)}</td><td className="py-3 pr-3 tabular-nums">{number(row.metrics.rmse)}</td><td className="py-3 pr-3 tabular-nums">{number(row.metrics.r2)}</td><td className="py-3 text-xs text-muted">{date(row.created_at)}</td></tr>)}</tbody>
         </table></div>}
-      <TablePagination page={page} pageSize={pageSize} pages={Math.ceil((result?.total ?? 0) / pageSize)} onPageChange={setPage} onPageSizeChange={value => { setPage(1); setPageSize(value); }} disabled={loading}/>
+      <TablePagination page={page} pageSize={pageSize} pages={Math.ceil((result?.total ?? 0) / pageSize)} onPageChange={setPage} onPageSizeChange={value => { setPage(1); setPageSize(value); }} disabled={loading} />
     </section>}
 
     {!loading && !error && tab === 'comparacion' && (batches.length === 0 ?
@@ -518,9 +518,9 @@ export default function Page() {
         <section className="space-y-2">
           <h2 className="text-base font-semibold text-main">Comparación de modelos · Validación IGP 2024</h2>
           <p className="text-xs text-muted">Resultados usados para seleccionar la configuración de cada modelo. Las diferencias se calculan frente a su propio baseline, sin comparar objetivos distintos.</p>
-          <div className="overflow-x-auto rounded-lg border border-border-ui">
+          <div className="overflow-x-auto rounded-lg border border-border-ui ui-thin-scrollbar">
             <table className="w-full min-w-[1320px] table-fixed text-sm text-main">
-              <ComparisonColumns/><ComparisonHeader/>
+              <ComparisonColumns /><ComparisonHeader />
               <tbody>{models.map(model => {
                 const reference = currentBatch?.[1].find(item => item.target_name === model.target_name && item.params.baseline === true);
                 const score = comparisonScore(model, reference);
@@ -528,14 +528,14 @@ export default function Page() {
                 return <tr key={model.id} className={`border-t border-border-ui/60 ${model.id === currentModel?.id ? 'bg-panel-alt/60' : ''}`}>
                   <th scope="row" className="px-4 py-3 text-left font-medium break-words">{algorithmName(model.algorithm)}</th>
                   <td className="px-4 py-3 text-muted">{target(model.target_name)}</td>
-                  <td className="px-4 py-3">{score.label}<MetricInfo metricKey={classification ? 'macro_f1' : 'mae'}/></td>
+                  <td className="px-4 py-3">{score.label}<MetricInfo metricKey={classification ? 'macro_f1' : 'mae'} /></td>
                   <td className="px-4 py-3 text-right tabular-nums">{primaryValue(score.expected, !classification, score.unit)}</td>
                   <td className="px-4 py-3 text-right tabular-nums font-medium">{primaryValue(score.observed, !classification, score.unit)}</td>
                   <td className={`px-4 py-3 text-right font-medium tabular-nums ${score.gain !== null && score.gain > 0 ? 'text-emerald-700 dark:text-emerald-300' : score.gain !== null && score.gain < 0 ? 'text-rose-700 dark:text-rose-300' : 'text-muted'}`}>
                     {favorableChange(score.gain, !classification, score.unit)}
                   </td>
                   <td className="px-4 py-3 text-xs tabular-nums text-muted">
-                    {classification ? 'Accuracy' : 'R²'}<MetricInfo metricKey={classification ? 'accuracy' : 'r2'}/>
+                    {classification ? 'Accuracy' : 'R²'}<MetricInfo metricKey={classification ? 'accuracy' : 'r2'} />
                     <span className="mt-1 block whitespace-nowrap">{classification ? percent(metric(reference, 'accuracy')) : number(metric(reference, 'r2'))} → {classification ? percent(metric(model, 'accuracy')) : number(metric(model, 'r2'))}</span>
                   </td>
                   <td className="px-4 py-3"><button type="button" aria-label={`Ver gráfico de ${algorithmName(model.algorithm)} en 2024`} onClick={() => selectGraph(model.id, 2024)} className="whitespace-nowrap rounded-lg border border-border-ui bg-panel px-2 py-1.5 text-xs text-main hover:bg-panel-alt">Ver gráfico</button></td>
@@ -549,11 +549,11 @@ export default function Page() {
           <h2 className="text-base font-semibold text-main">Comparación de modelos · Prueba final independiente · IGP 2025</h2>
           {finalLoading ? <p className="text-sm text-muted">Consultando resultados finales…</p>
             : finalError ? <p role="status" className="text-sm text-amber-600 dark:text-amber-300">No se pudo verificar la evaluación final: {finalError}</p>
-            : finalReport ? <>
+              : finalReport ? <>
                 <p className="text-xs text-muted">{finalReport.test_count} sismos de 2025 · Desarrollo: {finalReport.development_count} registros de 2019–2024 · Evaluación única registrada el {date(finalReport.evaluated_at)}. No representa pronósticos de futuros terremotos.</p>
-                <div className="overflow-x-auto rounded-lg border border-border-ui">
+                <div className="overflow-x-auto rounded-lg border border-border-ui ui-thin-scrollbar">
                   <table className="w-full min-w-[1320px] table-fixed text-sm text-main">
-                    <ComparisonColumns/><ComparisonHeader/>
+                    <ComparisonColumns /><ComparisonHeader />
                     <tbody>{models.map(model => {
                       const main = finalReport.models.find(item => item.algorithm === model.algorithm);
                       const reference = currentBatch?.[1].find(item => item.target_name === model.target_name && item.params.baseline === true);
@@ -566,14 +566,14 @@ export default function Page() {
                       return <tr key={model.id} className="border-t border-border-ui/60">
                         <th scope="row" className="px-4 py-3 text-left font-medium break-words">{algorithmName(model.algorithm)}</th>
                         <td className="px-4 py-3 text-muted">{target(model.target_name)}</td>
-                        <td className="px-4 py-3">{score.label}<MetricInfo metricKey={regression ? 'mae' : 'macro_f1'}/></td>
+                        <td className="px-4 py-3">{score.label}<MetricInfo metricKey={regression ? 'mae' : 'macro_f1'} /></td>
                         <td className="px-4 py-3 text-right tabular-nums">{primaryValue(baselineValue, regression, score.unit)}</td>
                         <td className="px-4 py-3 text-right font-medium tabular-nums">{primaryValue(modelValue, regression, score.unit)}</td>
                         <td className={`px-4 py-3 text-right font-medium tabular-nums ${gain !== null && gain > 0 ? 'text-emerald-700 dark:text-emerald-300' : gain !== null && gain < 0 ? 'text-rose-700 dark:text-rose-300' : 'text-muted'}`}>
                           {favorableChange(gain, regression, score.unit)}
                         </td>
                         <td className="px-4 py-3 text-xs tabular-nums text-muted">
-                          {regression ? 'R²' : 'Accuracy'}<MetricInfo metricKey={regression ? 'r2' : 'accuracy'}/>
+                          {regression ? 'R²' : 'Accuracy'}<MetricInfo metricKey={regression ? 'r2' : 'accuracy'} />
                           <span className="mt-1 block whitespace-nowrap">{regression ? number(dummy?.metrics.r2) : percent(dummy?.metrics.accuracy)} → {regression ? number(main?.metrics.r2) : percent(main?.metrics.accuracy)}</span>
                         </td>
                         <td className="px-4 py-3"><button type="button" disabled={!main} aria-label={`Ver gráfico de ${algorithmName(model.algorithm)} en 2025`}
@@ -596,73 +596,73 @@ export default function Page() {
           {graphPeriod === 2025 && <p className="text-xs text-muted">Los gráficos de 2025 usan exclusivamente métricas y matrices finales ya registradas. No se almacenaron pares por evento para trazar una curva real–estimada en 2025; no se repite la evaluación.</p>}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {(currentModel.task_type === 'regression' ? [['MAE', 'mae'], ['RMSE', 'rmse'], ['R²', 'r2']] : [['Accuracy', 'accuracy'], ['F1 macro', 'macro_f1']]).map(([label, key]) =>
-              <div key={key} className="rounded-lg bg-panel-alt p-3"><p className="flex items-center text-xs text-muted">{label}<MetricInfo metricKey={key as MetricHelpKey}/></p><p className="mt-1 text-lg font-semibold tabular-nums text-main">{key === 'accuracy' || key === 'macro_f1' ? percent(metricFrom(chartMetrics, key)) : `${number(metricFrom(chartMetrics, key))}${key !== 'r2' && metricFrom(chartMetrics, key) !== null ? currentModel.target_name === 'depth_observed' ? ' km' : ' M' : ''}`}</p><p className="text-xs text-muted">Baseline: {key === 'accuracy' || key === 'macro_f1' ? percent(metricFrom(chartBaselineMetrics, key)) : number(metricFrom(chartBaselineMetrics, key))}</p></div>
+              <div key={key} className="rounded-lg bg-panel-alt p-3"><p className="flex items-center text-xs text-muted">{label}<MetricInfo metricKey={key as MetricHelpKey} /></p><p className="mt-1 text-lg font-semibold tabular-nums text-main">{key === 'accuracy' || key === 'macro_f1' ? percent(metricFrom(chartMetrics, key)) : `${number(metricFrom(chartMetrics, key))}${key !== 'r2' && metricFrom(chartMetrics, key) !== null ? currentModel.target_name === 'depth_observed' ? ' km' : ' M' : ''}`}</p><p className="text-xs text-muted">Baseline: {key === 'accuracy' || key === 'macro_f1' ? percent(metricFrom(chartBaselineMetrics, key)) : number(metricFrom(chartBaselineMetrics, key))}</p></div>
             )}
           </div>
           {graphPeriod === 2024 && predictionLoading && <p className="text-xs text-muted">Cargando pares de validación 2024…</p>}
           {graphPeriod === 2024 && predictionError && <p role="status" className="text-xs text-amber-600 dark:text-amber-300">No hay pares completos disponibles ({predictionError}). Se mantienen las métricas, la matriz y la muestra de regresión guardadas originalmente.</p>}
           {graphPeriod === 2024 && currentModel.task_type === 'regression' && lines.length > 0 && <p className="text-xs text-muted">Serie de eventos de 2024 por fecha UTC, hasta 120 puntos visualizados. {predictionRows.length ? `${predictionRows.length} pares observados/estimados disponibles en tabla y CSV.` : 'Muestra original almacenada en métricas; recupera todos los pares con la CLI.'}</p>}
-          {graphPeriod === 2024 && currentModel.task_type === 'regression' && lines.length > 0 && <div className="h-72 w-full" role="img" aria-label="Serie real frente a estimada, validación 2024"><ResponsiveContainer width="100%" height="100%"><LineChart data={lines} margin={{ top: 12, right: 16, bottom: 4, left: 0 }}><CartesianGrid strokeDasharray="3 3" opacity={0.2}/><XAxis dataKey="date" hide/><YAxis width={55} domain={['auto', 'auto']} stroke="var(--ui-muted)"/><Tooltip content={<ComparisonTooltip/>}/><Legend/><Line dataKey="real" name="Real (2024)" dot={false} stroke="#3b82f6" strokeWidth={2}/><Line dataKey="estimated" name="Estimada (2024)" dot={false} stroke="#f59e0b" strokeWidth={2}/></LineChart></ResponsiveContainer></div>}
+          {graphPeriod === 2024 && currentModel.task_type === 'regression' && lines.length > 0 && <div className="h-72 w-full" role="img" aria-label="Serie real frente a estimada, validación 2024"><ResponsiveContainer width="100%" height="100%"><LineChart data={lines} margin={{ top: 12, right: 16, bottom: 4, left: 0 }}><CartesianGrid strokeDasharray="3 3" opacity={0.2} /><XAxis dataKey="date" hide /><YAxis width={55} domain={['auto', 'auto']} stroke="var(--ui-muted)" /><Tooltip content={<ComparisonTooltip />} /><Legend /><Line dataKey="real" name="Real (2024)" dot={false} stroke="#3b82f6" strokeWidth={2} /><Line dataKey="estimated" name="Estimada (2024)" dot={false} stroke="#f59e0b" strokeWidth={2} /></LineChart></ResponsiveContainer></div>}
           {graphPeriod === 2025 && currentModel.task_type === 'regression' && (finalLoading ? <p className="text-sm text-muted">Cargando métricas finales de 2025…</p> : finalRegressionBars.length > 0 ? <div className="space-y-2">
             <p className="text-xs text-muted">Comparación de MAE y RMSE finales, referencia frente a modelo. Unidades: {currentModel.target_name === 'depth_observed' ? 'km' : 'magnitud M'}. Menor es mejor.</p>
             <div className="h-72 w-full" role="img" aria-label="Gráfico de errores agregados de prueba final 2025">
               <ResponsiveContainer width="100%" height="100%"><BarChart data={finalRegressionBars} margin={{ top: 12, right: 16, bottom: 4, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.2}/><XAxis dataKey="metric" stroke="var(--ui-muted)"/><YAxis width={55} stroke="var(--ui-muted)"/>
-                <Tooltip content={<ComparisonTooltip/>}/><Legend/>
-                <Bar name="Baseline" dataKey="referencia" fill="#64748b" radius={[4,4,0,0]}/>
-                <Bar name="Modelo" dataKey="modelo" fill="#0e7490" radius={[4,4,0,0]}/>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.2} /><XAxis dataKey="metric" stroke="var(--ui-muted)" /><YAxis width={55} stroke="var(--ui-muted)" />
+                <Tooltip content={<ComparisonTooltip />} /><Legend />
+                <Bar name="Baseline" dataKey="referencia" fill="#64748b" radius={[4, 4, 0, 0]} />
+                <Bar name="Modelo" dataKey="modelo" fill="#0e7490" radius={[4, 4, 0, 0]} />
               </BarChart></ResponsiveContainer>
             </div>
           </div> : <p className="text-sm text-muted">Las métricas finales para este modelo aún no están disponibles.</p>)}
-          {currentModel.task_type === 'classification' && (graphPeriod === 2024 || finalModel) && <ClassificationEvidence metrics={chartMetrics} period={graphPeriod}/>}
+          {currentModel.task_type === 'classification' && (graphPeriod === 2024 || finalModel) && <ClassificationEvidence metrics={chartMetrics} period={graphPeriod} />}
           {graphPeriod === 2024 && predictionRows.length > 0 && <section className="space-y-3 border-t border-border-ui pt-4">
             <button type="button" aria-expanded={showPredictionRows} onClick={() => setShowPredictionRows(value => !value)}
               className="flex w-full items-center justify-between gap-3 rounded-lg border border-border-ui bg-panel-alt px-4 py-3 text-left text-sm font-semibold text-main hover:bg-page">
               <span>Trazabilidad por sismo · Validación 2024 <span className="font-normal text-muted">({predictionRows.length} registros)</span></span>
-              <ChevronDown size={18} aria-hidden="true" className={`shrink-0 transition-transform ${showPredictionRows ? 'rotate-180' : ''}`}/>
+              <ChevronDown size={18} aria-hidden="true" className={`shrink-0 transition-transform ${showPredictionRows ? 'rotate-180' : ''}`} />
             </button>
             {showPredictionRows && <>
-            <p className="text-xs text-muted">{predictionRows.length} registros IGP asociados a este experimento; CSV descarga todos. No incluye 2025.</p>
-            <div className="overflow-x-auto"><table className="w-full min-w-[550px] text-left text-sm text-main">
-              <thead><tr className="border-b border-border-ui text-xs text-muted"><th className="p-2">Fila Excel</th><th className="p-2">Fecha UTC</th><th className="p-2">Observado</th><th className="p-2">Estimado</th><th className="p-2">Resultado</th></tr></thead>
-              <tbody>{predictionRows.slice((predictionPage - 1) * predictionPageSize, predictionPage * predictionPageSize).map(row => {
-                const isRegression = currentModel.task_type === 'regression';
-                const observed = row.actual_value;
-                const estimated = row.predicted_value;
-                return <tr key={row.source_row} className="border-b border-border-ui/50">
-                  <td className="p-2 tabular-nums">{row.source_row}</td>
-                  <td className="p-2 text-xs">{row.occurred_at.replace('T', ' ').slice(0, 19)} UTC</td>
-                  <td className="p-2">{isRegression ? number(Number(observed)) : observed}</td>
-                  <td className="p-2">{isRegression ? number(Number(estimated)) : estimated}</td>
-                  <td className="p-2">{isRegression ? `Error ${number(Math.abs(Number(observed) - Number(estimated)))}` : observed === estimated ? 'Acierto' : 'Error'}</td>
-                </tr>;
-              })}</tbody>
-            </table></div>
-            <TablePagination page={predictionPage} pageSize={predictionPageSize}
-              pages={Math.ceil(predictionRows.length / predictionPageSize)} onPageChange={setPredictionPage}
-              onPageSizeChange={size => { setPredictionPage(1); setPredictionPageSize(size); }}/>
+              <p className="text-xs text-muted">{predictionRows.length} registros IGP asociados a este experimento; CSV descarga todos. No incluye 2025.</p>
+              <div className="overflow-x-auto ui-thin-scrollbar"><table className="w-full min-w-[550px] text-left text-sm text-main">
+                <thead><tr className="border-b border-border-ui text-xs text-muted"><th className="p-2">Fila</th><th className="p-2">Fecha UTC</th><th className="p-2">Observado</th><th className="p-2">Estimado</th><th className="p-2">Resultado</th></tr></thead>
+                <tbody>{predictionRows.slice((predictionPage - 1) * predictionPageSize, predictionPage * predictionPageSize).map(row => {
+                  const isRegression = currentModel.task_type === 'regression';
+                  const observed = row.actual_value;
+                  const estimated = row.predicted_value;
+                  return <tr key={row.source_row} className="border-b border-border-ui/50">
+                    <td className="p-2 tabular-nums">{row.source_row}</td>
+                    <td className="p-2 text-xs">{row.occurred_at.replace('T', ' ').slice(0, 19)} UTC</td>
+                    <td className="p-2">{isRegression ? number(Number(observed)) : observed}</td>
+                    <td className="p-2">{isRegression ? number(Number(estimated)) : estimated}</td>
+                    <td className="p-2">{isRegression ? `Error ${number(Math.abs(Number(observed) - Number(estimated)))}` : observed === estimated ? 'Acierto' : 'Error'}</td>
+                  </tr>;
+                })}</tbody>
+              </table></div>
+              <TablePagination page={predictionPage} pageSize={predictionPageSize}
+                pages={Math.ceil(predictionRows.length / predictionPageSize)} onPageChange={setPredictionPage}
+                onPageSizeChange={size => { setPredictionPage(1); setPredictionPageSize(size); }} />
             </>}
           </section>}
-          {currentModel.target_name === 'depth_class_observed' && <div className="flex gap-2 rounded-lg bg-panel-alt p-3 text-sm text-muted"><AlertTriangle size={18} className="shrink-0"/><p>{knnNote}</p></div>}
+          {currentModel.target_name === 'depth_class_observed' && <div className="flex gap-2 rounded-lg bg-panel-alt p-3 text-sm text-muted"><AlertTriangle size={18} className="shrink-0" /><p>{knnNote}</p></div>}
           <div className="border-t border-border-ui pt-4 text-xs text-muted"><p>Entrenamiento: {currentModel.validation_spec.train_count} registros, hasta {date(currentModel.validation_spec.train_end)} · Validación: {currentModel.validation_spec.validation_count} registros, hasta {date(currentModel.validation_spec.validation_end ?? '')}. Prueba 2025: {finalReport ? 'evaluada de forma independiente' : 'pendiente y reservada'}.</p><p className="mt-2">{currentModel.limitations}</p></div>
         </>}
       </section>)}
 
     {tab === 'estimaciones' && <section className="space-y-4 rounded-xl border border-border-ui bg-panel p-5">
       <div className="flex items-start gap-3">
-        <BrainCircuit size={20} className="mt-0.5 shrink-0 text-accent"/>
+        <BrainCircuit size={20} className="mt-0.5 shrink-0 text-accent" />
         <div className="space-y-1">
           <h2 className="font-semibold text-main">Estimaciones retrospectivas · Validación 2024</h2>
           <p className="text-sm text-muted">Estos valores fueron calculados para sismos ya ocurridos; se comparan contra sus observaciones reales. Solo modelos IGP, sin baselines. No son pronósticos, no están aprobados ni se envían al Centro de alertas.</p>
           <p className="text-xs text-muted">La diferencia o acierto observado no constituye un intervalo de predicción ni una probabilidad calibrada. No hay fecha individual de cálculo ni revisión formal registradas.</p>
         </div>
       </div>
-      {summaryLoading && <LoadingSpinner label="Calculando resumen de todas las estimaciones IGP…"/>}
+      {summaryLoading && <LoadingSpinner label="Calculando resumen de todas las estimaciones IGP…" />}
       {summaryError && <p role="alert" className="rounded-lg border border-rose-500/50 p-4 text-sm text-rose-600 dark:text-rose-300">{summaryError}. Comprueba la ruta /ml/estimates/summary.</p>}
       {!summaryLoading && !summaryError && estimateSummary && <>
         <div className="grid gap-3 sm:grid-cols-3">
           {([['Sismos únicos', estimateSummary.unique_events], ['Modelos evaluados', estimateSummary.total_models],
-            ['Estimaciones retrospectivas', estimateSummary.total_estimates]] as const).map(([label, value]) =>
+          ['Estimaciones retrospectivas', estimateSummary.total_estimates]] as const).map(([label, value]) =>
             <div key={label} className="rounded-lg bg-panel-alt p-4">
               <p className="text-xs text-muted">{label}</p>
               <p className="mt-1 text-2xl font-semibold tabular-nums text-main">{value.toLocaleString('es-PE')}</p>
@@ -671,7 +671,7 @@ export default function Page() {
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-main">Resumen por modelo</h3>
           <p className="text-xs text-muted">Cada sismo puede aparecer una vez por modelo. Las métricas son de validación 2024 y no representan capacidad de pronóstico.</p>
-          <div className="overflow-x-auto rounded-lg border border-border-ui">
+          <div className="overflow-x-auto rounded-lg border border-border-ui ui-thin-scrollbar">
             <table className="w-full min-w-[560px] text-left text-sm text-main">
               <thead className="bg-panel-alt text-xs text-muted"><tr><th className="p-3">Modelo</th><th className="p-3">Objetivo</th><th className="p-3">Estimaciones</th><th className="p-3">Métrica validación</th><th className="p-3">Detalle</th></tr></thead>
               <tbody>{estimateSummary.models.map(model => <tr key={model.experiment_id} className="border-t border-border-ui/60">
@@ -704,17 +704,17 @@ export default function Page() {
         </label>
         <p className="text-xs text-muted">CSV exporta solo la página visible del detalle.</p>
       </div>}
-      {showEstimateRows && estimateLoading && <LoadingSpinner label="Cargando estimaciones retrospectivas IGP…"/>}
+      {showEstimateRows && estimateLoading && <LoadingSpinner label="Cargando estimaciones retrospectivas IGP…" />}
       {showEstimateRows && estimateError && <p role="alert" className="rounded-lg border border-rose-500/50 p-4 text-sm text-rose-600 dark:text-rose-300">{estimateError}. Comprueba que el backend tenga la ruta /ml/estimates.</p>}
       {showEstimateRows && !estimateLoading && !estimateError && !estimates?.items.length && <p className="rounded-lg bg-panel-alt p-6 text-center text-sm text-muted">Todavía no hay estimaciones retrospectivas IGP verificadas. Revisa la carga de predicciones de validación 2024.</p>}
       {showEstimateRows && !estimateLoading && !estimateError && Boolean(estimates?.items.length) && <>
         <p className="text-xs text-muted">{estimates?.total ?? 0} resultados retrospectivos sin revisar · CSV: únicamente la página visible · 2025 reservado.</p>
-        <div className="overflow-x-auto rounded-lg border border-border-ui">
+        <div className="overflow-x-auto rounded-lg border border-border-ui ui-thin-scrollbar">
           <table className="w-full min-w-[840px] text-left text-sm text-main">
             <thead className="bg-panel-alt text-xs text-muted"><tr><th className="p-3">Modelo</th><th className="p-3">Sismo 2024 (UTC)</th><th className="p-3">Ubicación (coordenadas)</th><th className="p-3">Observado</th><th className="p-3">Estimado</th><th className="p-3">Error / acierto</th><th className="p-3">Revisión</th><th className="p-3">Acción</th></tr></thead>
             <tbody>{estimates?.items.map(item => <tr key={`${item.experiment_id}-${item.source_row}`} className="border-t border-border-ui/70">
               <td className="p-3"><span className="font-medium">{algorithmName(item.algorithm)}</span><p className="mt-1 text-xs text-muted">{target(item.target_name)}</p></td>
-              <td className="p-3 tabular-nums text-xs">{item.occurred_at.slice(0, 10)}<p className="mt-1 text-muted">Fila Excel {item.source_row}</p></td>
+              <td className="p-3 tabular-nums text-xs">{item.occurred_at.slice(0, 10)}<p className="mt-1 text-muted">Fila {item.source_row}</p></td>
               <td className="p-3 tabular-nums text-xs">{item.latitude == null || item.longitude == null ? 'Sin coordenadas' : `${Number(item.latitude).toFixed(3)}, ${Number(item.longitude).toFixed(3)}`}</td>
               <td className="p-3 tabular-nums">{item.task_type === 'regression' ? number(Number(item.actual_value)) : item.actual_value}</td>
               <td className="p-3 tabular-nums">{item.task_type === 'regression' ? number(Number(item.predicted_value)) : item.predicted_value}</td>
@@ -729,7 +729,7 @@ export default function Page() {
         pages={Math.ceil((estimates?.total ?? 0) / estimatePageSize)}
         onPageChange={setEstimatePage}
         onPageSizeChange={size => { setEstimatePage(1); setEstimatePageSize(size); }}
-        disabled={estimateLoading}/>}
+        disabled={estimateLoading} />}
     </section>}
 
     <Modal open={estimateDetail !== null} title="Detalle de estimación experimental" onClose={() => setEstimateDetail(null)}>
@@ -760,10 +760,10 @@ export default function Page() {
           <select className="mt-1 w-full rounded-lg border border-border-ui bg-page p-2 text-main" value={draft.taskType ?? ''} onChange={e => setDraft(v => ({ ...v, taskType: e.target.value as ExperimentFilters['taskType'] }))}><option value="">Todos</option><option value="regression">Regresión</option><option value="classification">Clasificación</option></select>
         </label>
         <label className="block text-sm text-muted">ID de dataset (opcional)
-          <input className="mt-1 w-full rounded-lg border border-border-ui bg-page p-2 text-main" placeholder="UUID del snapshot IGP" value={draft.datasetId ?? ''} onChange={e => setDraft(v => ({ ...v, datasetId: e.target.value.trim() }))}/>
+          <input className="mt-1 w-full rounded-lg border border-border-ui bg-page p-2 text-main" placeholder="UUID del snapshot IGP" value={draft.datasetId ?? ''} onChange={e => setDraft(v => ({ ...v, datasetId: e.target.value.trim() }))} />
         </label>
         <label className="block text-sm text-muted">ID de ejecución (opcional)
-          <input className="mt-1 w-full rounded-lg border border-border-ui bg-page p-2 text-main" placeholder="UUID de la ejecución" value={draft.batchId ?? ''} onChange={e => setDraft(v => ({ ...v, batchId: e.target.value.trim() }))}/>
+          <input className="mt-1 w-full rounded-lg border border-border-ui bg-page p-2 text-main" placeholder="UUID de la ejecución" value={draft.batchId ?? ''} onChange={e => setDraft(v => ({ ...v, batchId: e.target.value.trim() }))} />
         </label>
       </div>
     </Modal>

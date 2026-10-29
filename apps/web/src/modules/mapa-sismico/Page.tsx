@@ -16,6 +16,7 @@ import { useAnalyticsFilters } from '../../hooks/useAnalyticsFilters';
 import { useIGPFeed } from '../../hooks/useIGPFeed';
 import { getDashboardOperations, getMapEvents } from '../../services/analytics';
 import { IGP_OFFICIAL_URL, peruDate } from '../../services/igp';
+import { individualIGPReport } from '../../lib/igpReportUrl';
 import { matchesPeruPeriod, withCurrentPeruMonth } from '../../lib/peruMonth';
 import { clusterEpicenters, MAGNITUDE_COLORS, magnitudeColor, magnitudeRadius } from '../../lib/mapClusters';
 import { departmentBounds, pointInDepartment, PERU_DEPARTMENTS, type DepartmentBoundary } from '../../lib/peruDepartments';
@@ -75,6 +76,8 @@ function Epicenter({ feature, focused, liveFallback, autoZoom = false, onClose }
   const markerRef = useRef<L.CircleMarker | null>(null);
   const [longitude, latitude] = feature.geometry.coordinates;
   const event = feature.properties;
+  // Enlazar solo reportes individuales IGP identificados de forma válida.
+  const reportUrl = individualIGPReport(event.external_id, event.source_url);
 
   useEffect(() => {
     if (!focused || !markerRef.current) return;
@@ -114,7 +117,7 @@ function Epicenter({ feature, focused, liveFallback, autoZoom = false, onClose }
         <p>Fecha/hora Perú: {peruDate(event.occurred_at, true)}</p>
         <p>Fuente: IGP/CENSIS</p>
         {liveFallback && <p>Reporte IGP en vivo, pendiente de confirmar su presencia en el catálogo sincronizado.</p>}
-        {event.source_url?.startsWith('https://') && <a href={event.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-blue-700">Ver fuente oficial <ExternalLink size={12} /></a>}
+        {reportUrl && <a href={reportUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-accent hover:underline">Ver reporte específico IGP <ExternalLink size={12}/></a>}
       </div>
     </Popup>
   </CircleMarker>;
@@ -541,22 +544,22 @@ export default function Page() {
             style={{ height: '100%', width: '100%', isolation: 'isolate', zIndex: 0, background: 'var(--ui-panel-alt)' }}>
             <LayersControl position="topright">
               <LayersControl.BaseLayer checked name="OpenStreetMap">
-                <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                <TileLayer className="sismo-base-tiles" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>' maxZoom={17} />
               </LayersControl.BaseLayer>
               {/* MapTiler utiliza los mismos datos IGP y capas Leaflet existentes;
                   únicamente cambia el fondo. La clave debe estar autorizada para
                   localhost y el dominio de Vercel antes de activar estos estilos. */}
               {MAPTILER_KEY && <LayersControl.BaseLayer name="Claro (MapTiler)">
-                <TileLayer url={mapTilerRaster('dataviz-light', 'png')}
+                <TileLayer className="sismo-base-tiles" url={mapTilerRaster('dataviz-light', 'png')}
                   attribution={MAPTILER_ATTRIBUTION} maxZoom={19} />
               </LayersControl.BaseLayer>}
               {MAPTILER_KEY && <LayersControl.BaseLayer name="Oscuro (MapTiler)">
-                <TileLayer url={mapTilerRaster('dataviz-dark', 'png')}
+                <TileLayer className="sismo-base-tiles" url={mapTilerRaster('dataviz-dark', 'png')}
                   attribution={MAPTILER_ATTRIBUTION} maxZoom={19} />
               </LayersControl.BaseLayer>}
               {MAPTILER_KEY && <LayersControl.BaseLayer name="Satélite (MapTiler)">
-                <TileLayer url={mapTilerRaster('satellite-v4', 'jpg')}
+                <TileLayer className="sismo-base-tiles" url={mapTilerRaster('satellite-v4', 'jpg')}
                   attribution={MAPTILER_ATTRIBUTION} maxZoom={19} />
               </LayersControl.BaseLayer>}
               <LayersControl.BaseLayer name="Sin mapa base">

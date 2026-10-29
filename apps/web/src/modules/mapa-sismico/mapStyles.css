@@ -105,3 +105,10 @@
 .sismo-leaflet-map .leaflet-interactive.sismo-cluster-circle { cursor: pointer; }
 .sismo-leaflet-map .leaflet-interactive.sismo-point { cursor: pointer; }
 /* Los colores de los sismos se establecen por marcador y no dependen del tema. */
+
+/* UI_GLOBAL_02: evitar pequeñas líneas entre mosaicos raster en ciertos
+ * niveles de zoom o escalas de pantalla. El solapamiento ~0,6 px por lado
+ * NO afecta a los polígonos, círculos ni contornos de los filtros. */
+.sismo-leaflet-map .sismo-base-tiles img.leaflet-tile {
+  scale: 1.005;
+}

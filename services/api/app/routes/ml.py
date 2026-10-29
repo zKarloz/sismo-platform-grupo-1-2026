@@ -55,7 +55,7 @@ def list_experiments(
         raise HTTPException(503, 'Experimentos no disponibles; verificar migraciones ML') from None
     return {'items': [dict(r) for r in records], 'total': total,
             'page': page, 'page_size': page_size,
-            'disclaimer': 'Resultados experimentales retrospectivos IGP. No predicción ni alerta oficial.'}
+            'disclaimer': 'Resultados experimentales retrospectivos IGP. No es predicción ni alerta oficial.'}
 
 
 @router.get('/experiments/{experiment_id}/predictions')

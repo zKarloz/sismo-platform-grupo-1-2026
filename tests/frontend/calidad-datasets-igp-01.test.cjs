@@ -37,7 +37,9 @@ test('API y snapshot limitados a IGP/CENSIS con filtro servidor', () => {
   assert.match(client, /source: 'IGP\/CENSIS'/);
 });
 test('no se presentan aprobaciones o entrenamientos ficticios', () => {
-  assert.match(page, /La aprobación formal del dataset/);
+  // Desde la Revisión 03 la aprobación se registra con RBAC; no hay aprobaciones falsas.
+  assert.match(page, /reviewDataset\(selected\.id/);
+  assert.match(page, /review_decision/);
   assert.doesNotMatch(page, /Aprobar dataset<\/button>/);
   assert.doesNotMatch(page, /Entrenar ahora<\/button>/);
 });

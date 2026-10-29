@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.engine import Engine
 
-from app.db.tables import datasets, historical_snapshot_rows, ml_experiments
+from app.db.tables import datasets, historical_snapshot_rows, ml_experiments, ml_validation_predictions
 from app.quality.historical import DATASET_NAME, KIND, SOURCE
 from app.quality.report import content_sha256
 
@@ -110,7 +110,7 @@ def prepare_igp(rows: list[dict]) -> dict:
         previous_7d = len(window) - sum(value == when for value in window)
         hour_utc = when.hour + when.minute / 60 + when.second / 3600
         item = {
-            'date': when.isoformat(), 'latitude': float(values[0]),
+            'date': when.isoformat(), 'source_row': record['source_row'], 'latitude': float(values[0]),
             'longitude': float(values[1]), 'depth': float(values[2]),
             'magnitude': float(values[3]), 'hour_utc': hour_utc,
             'previous_7d': previous_7d,
@@ -148,8 +148,8 @@ def inspection(engine: Engine, dataset_id: str) -> dict:
     }
 
 
-def train_igp(engine: Engine, dataset_id: str, *, seed: int = 42) -> dict:
-    """Entrena cuatro modelos + un Dummy para CADA objetivo, misma validación 2024."""
+def train_igp(engine: Engine, dataset_id: str, *, seed: int = 42, persist: bool = True) -> dict:
+    """Entrena o reproduce los ocho experimentos; persist=False no escribe en BD."""
     if not 0 <= seed <= 2**31 - 1:
         raise ValueError('Semilla fuera de rango')
     ds, rows = load_igp_snapshot(engine, dataset_id)
@@ -207,6 +207,20 @@ def train_igp(engine: Engine, dataset_id: str, *, seed: int = 42) -> dict:
                     for i in range(0, len(true), step)][:120]}
     batch_id = uuid4()
     results: list[dict] = []
+    predictions_by_algorithm: dict[str, list[dict]] = {}
+
+    def validation_predictions(algorithm, actual, predicted):
+        """Guarda los 556 pares sin redondear, unidos a fila física y fecha IGP."""
+        if len(actual) != len(va) or len(predicted) != len(va):
+            raise ValueError('Número de predicciones incompatible con validación 2024')
+        predictions_by_algorithm[algorithm] = [
+            {'source_row': item['source_row'], 'occurred_at': _utc(item['date']),
+             'actual_value': float(real) if isinstance(real, (int, float, np.number)) else str(real),
+             'predicted_value': float(est) if isinstance(est, (int, float, np.number)) else str(est),
+             'split': 'validation'}
+            for item, real, est in zip(va, actual, predicted)
+        ]
+
     def add(task, algorithm, target, names, params, metrics, baseline=False):
         results.append({
             'dataset_id': UUID(dataset_id), 'batch_id': batch_id,
@@ -223,10 +237,14 @@ def train_igp(engine: Engine, dataset_id: str, *, seed: int = 42) -> dict:
         dummy = DummyRegressor(strategy='mean').fit(x_train, y_train)
         model = LinearRegression().fit(x_train, y_train)
         target_name = 'magnitude_observed' if target == 'magnitude' else 'depth_observed'
-        add('regression', 'DummyRegressor-mean-' + target, target_name, names,
-            {'strategy': 'mean'}, regression_metrics(y_val, dummy.predict(x_val), unit), True)
+        dummy_name = 'DummyRegressor-mean-' + target
+        pred_dummy, pred_model = dummy.predict(x_val), model.predict(x_val)
+        validation_predictions(dummy_name, y_val, pred_dummy)
+        validation_predictions(name, y_val, pred_model)
+        add('regression', dummy_name, target_name, names,
+            {'strategy': 'mean'}, regression_metrics(y_val, pred_dummy, unit), True)
         add('regression', name, target_name, names, {'fit_on': 'train_only'},
-            regression_metrics(y_val, model.predict(x_val), unit))
+            regression_metrics(y_val, pred_model, unit))
     fit_regression('LinearRegression-simple', 'magnitude', ('depth',), 'magnitud instrumental sin escala especificada')
     fit_regression('LinearRegression-multiple', 'depth', ('latitude', 'longitude'), 'km de profundidad')
 
@@ -236,6 +254,8 @@ def train_igp(engine: Engine, dataset_id: str, *, seed: int = 42) -> dict:
     knn = Pipeline([('scaler', StandardScaler()),
                     ('knn', KNeighborsClassifier(n_neighbors=5, weights='distance'))])
     knn.fit(xtr_knn, ytr_knn)
+    validation_predictions('DummyClassifier-most_frequent-depth', yva_knn, dummy.predict(xva_knn))
+    validation_predictions('KNN-binary-depth', yva_knn, knn.predict(xva_knn))
     add('classification', 'DummyClassifier-most_frequent-depth', 'depth_class_observed',
         ('latitude', 'longitude'), {'strategy': 'most_frequent'},
         classification_metrics(yva_knn, dummy.predict(xva_knn), DEPTH_CLASSES), True)
@@ -252,6 +272,8 @@ def train_igp(engine: Engine, dataset_id: str, *, seed: int = 42) -> dict:
     forest = RandomForestClassifier(n_estimators=200, max_depth=12, min_samples_leaf=5,
                                     class_weight='balanced', random_state=seed, n_jobs=1)
     forest.fit(xtr_rf, ytr_rf)
+    validation_predictions('DummyClassifier-most_frequent-magnitude', yva_rf, base.predict(xva_rf))
+    validation_predictions('RandomForest-magnitude', yva_rf, forest.predict(xva_rf))
     add('classification', 'DummyClassifier-most_frequent-magnitude', 'magnitude_range_observed',
         rf_names, {'strategy': 'most_frequent'},
         classification_metrics(yva_rf, base.predict(xva_rf), MAG_CLASSES), True)
@@ -260,9 +282,21 @@ def train_igp(engine: Engine, dataset_id: str, *, seed: int = 42) -> dict:
          'class_weight': 'balanced', 'random_state': seed, 'previous_days': 7},
         classification_metrics(yva_rf, forest.predict(xva_rf), MAG_CLASSES))
 
-    # Evita registrar resultados incompletos ante problemas en cualquiera de los modelos.
+    # El conjunto de predicciones puede reproducirse sin escribir, para completar
+    # experimentos ya registrados (sin alterar sus IDs, métricas ni fechas).
+    if not persist:
+        return {'inspection': check, 'experiments': results,
+                'predictions': predictions_by_algorithm}
+
+    # Guarda las ocho métricas y todos los pares en una sola transacción.
+    # La tabla nueva requiere la migración ML_IGP_02_PREDICCIONES.sql.
+    ids = {row['algorithm']: uuid4() for row in results}
     with engine.begin() as conn:
-        conn.execute(ml_experiments.insert(), [dict(row, id=uuid4()) for row in results])
+        conn.execute(ml_experiments.insert(), [dict(row, id=ids[row['algorithm']]) for row in results])
+        conn.execute(ml_validation_predictions.insert(), [
+            {'experiment_id': ids[algorithm], 'dataset_id': UUID(dataset_id), **item}
+            for algorithm, items in predictions_by_algorithm.items() for item in items
+        ])
     return {'inspection': check, 'batch_id': str(batch_id),
             'experiments': [{**r, 'dataset_id': str(r['dataset_id']), 'batch_id': str(r['batch_id'])}
                             for r in results]}

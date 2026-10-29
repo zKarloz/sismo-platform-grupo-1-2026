@@ -37,6 +37,7 @@ test('tres pestañas y acciones a la derecha, un gráfico visible por vez', () =
 });
 test('pantalla no publica pronósticos oficiales ni datos simulados', () => {
   assert.match(ui, /no predicciones sísmicas/i);
-  assert.match(ui, /aún no está habilitada/i);
+  assert.match(ui, /sin revisión registrada/i);
+  assert.match(ui, /no están aprobados ni se envían al Centro de alertas/i);
   assert.match(ui, /escasez de sismos profundos/);
 });

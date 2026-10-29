@@ -25,6 +25,11 @@ export interface DatasetMetadata {
   created_at: string;
   query_spec: Record<string, unknown>;
   quality_report: QualityReport;
+  // Una versión sin decisión tiene una revisión pendiente.
+  review_decision: 'approved' | 'rejected' | null;
+  review_note: string | null;
+  reviewed_at: string | null;
+  reviewer_name: string | null;
 }
 export interface DatasetList {
   items: DatasetMetadata[];
@@ -58,4 +63,13 @@ export interface DatasetIntegrity {
   igp_only: boolean;
   verified: boolean;
   sha256: string;
+}
+
+export interface DatasetReviewResponse {
+  dataset_id: string;
+  decision: 'approved' | 'rejected';
+  note: string;
+  reviewer_name: string;
+  reviewed_at: string;
+  dataset_sha256: string;
 }

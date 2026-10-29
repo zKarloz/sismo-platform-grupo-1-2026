@@ -4,20 +4,24 @@ Las operaciones de escritura se limitan al comando CLI hasta tener RBAC.
 """
 
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, case, func, or_, select, text
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.db.session import get_read_engine
-from app.db.tables import datasets, events, snapshot_rows, historical_snapshot_rows, sources
+from app.db.tables import datasets, events, snapshot_rows, historical_snapshot_rows, sources, dataset_reviews, users, audit_logs
 from app.routes.filters import SeismicFilters, get_filters
 from app.quality.source import IGP_SOURCE
 from app.quality.service import verify_dataset
 from app.quality.historical import KIND
 from app.quality.report import content_sha256
+from app.auth.security import Principal, require_roles
 
 quality_router = APIRouter(prefix="/data-quality", tags=["Calidad de datos"])
 datasets_router = APIRouter(prefix="/datasets", tags=["Datasets versionados"])
@@ -94,10 +98,17 @@ def list_datasets(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, l
     try:
         with engine.connect() as conn:
             total = conn.execute(select(func.count()).select_from(datasets).where(IGP_DATASET)).scalar_one()
+            # LEFT JOIN: ausencia de decisión significa pendiente, no aprobación automática.
             result = conn.execute(
                 select(datasets.c.id, datasets.c.name, datasets.c.version,
                        datasets.c.row_count, datasets.c.content_sha256, datasets.c.created_at,
-                       datasets.c.quality_report, datasets.c.query_spec)
+                       datasets.c.quality_report, datasets.c.query_spec,
+                       dataset_reviews.c.decision.label("review_decision"),
+                       dataset_reviews.c.note.label("review_note"),
+                       dataset_reviews.c.reviewed_at.label("reviewed_at"),
+                       users.c.full_name.label("reviewer_name"))
+                .select_from(datasets.outerjoin(dataset_reviews, datasets.c.id == dataset_reviews.c.dataset_id)
+                             .outerjoin(users, dataset_reviews.c.reviewed_by == users.c.id))
                 .where(IGP_DATASET)
                 .order_by(datasets.c.created_at.desc(), datasets.c.id.desc())
                 .offset((page - 1) * page_size).limit(page_size)
@@ -206,3 +217,82 @@ def dataset_integrity(dataset_id: UUID, engine: Engine = Depends(get_read_engine
     status["verified"] = bool(status["row_count_matches"] and status["hash_matches"]
                                and status["igp_only"] and split_valid)
     return status
+
+
+class DatasetDecisionInput(BaseModel):
+    """La identidad del responsable NO se acepta en el cuerpo del cliente."""
+    model_config = ConfigDict(extra="forbid")
+    decision: Literal["approved", "rejected"]
+    note: str = Field(min_length=15, max_length=1000)
+
+
+@datasets_router.post("/{dataset_id}/review", status_code=201)
+def review_dataset(dataset_id: UUID, body: DatasetDecisionInput,
+                   principal: Principal = Depends(require_roles("administrador", "analista")),
+                   engine: Engine = Depends(get_read_engine)) -> dict:
+    """Aprobar/rechazar UNA vez, sobre la versión exacta y su huella congelada.
+
+    La aprobación técnica es posterior a la creación y NO acredita que modelos
+    anteriores fueran entrenados después de recibir la aprobación.
+    """
+    note = body.note.strip()
+    if not 15 <= len(note) <= 1000:
+        raise HTTPException(422, "Explica brevemente la decisión (15 a 1000 caracteres)")
+    try:
+        with engine.begin() as conn:
+            statement = select(datasets).where(datasets.c.id == dataset_id, IGP_DATASET)
+            if conn.dialect.name == "postgresql":
+                statement = statement.with_for_update()
+            ds = conn.execute(statement).mappings().first()
+            if ds is None:
+                raise HTTPException(404, "Dataset IGP no encontrado")
+            if ds["query_spec"].get("dataset_kind") != KIND:
+                raise HTTPException(422, "La revisión formal exige un snapshot histórico IGP")
+            if conn.execute(select(dataset_reviews.c.dataset_id).where(
+                    dataset_reviews.c.dataset_id == dataset_id)).first():
+                raise HTTPException(409, "Esta versión ya tiene una decisión definitiva")
+            if body.decision == "approved":
+                # Recalcula la integridad sobre todas las filas dentro de la transacción.
+                rows = conn.execute(select(historical_snapshot_rows.c.record)
+                    .where(historical_snapshot_rows.c.dataset_id == dataset_id)
+                    .order_by(historical_snapshot_rows.c.position)).scalars().all()
+                report = ds["quality_report"]
+                split_counts = report.get("by_split", {})
+                valid = (bool(rows) and len(rows) == ds["row_count"]
+                    and content_sha256(rows) == ds["content_sha256"]
+                    and sum(r.get("split") == "train" for r in rows) == split_counts.get("train")
+                    and sum(r.get("split") == "validation" for r in rows) == split_counts.get("validation")
+                    and all(_historical_partition_valid(r) for r in rows)
+                    and all(r.get("magnitude") is not None and r.get("depth_km") is not None
+                            and r.get("latitude") is not None and r.get("longitude") is not None
+                            and r.get("occurred_at") for r in rows)
+                    and report.get("essential_fields_missing") == 0
+                    and report.get("duplicates_within_source") == 0
+                    and report.get("out_of_range_or_invalid") == 0
+                    and report.get("future_events") == 0
+                    and ds["query_spec"].get("source") == IGP_SOURCE
+                    and ds["query_spec"].get("holdout_test") is not None)
+                if not valid:
+                    raise HTTPException(409, "El snapshot no supera la integridad, partición o calidad esencial")
+            reviewed_at = datetime.now(timezone.utc)
+            conn.execute(dataset_reviews.insert().values(
+                dataset_id=dataset_id, decision=body.decision, note=note,
+                reviewed_by=principal.id, reviewed_at=reviewed_at,
+                dataset_sha256=ds["content_sha256"],
+            ))
+            # La revisión y su auditoría se confirman o revierten juntas.
+            conn.execute(audit_logs.insert().values(
+                id=uuid4(), actor_id=principal.id, action=f"dataset.review.{body.decision}",
+                entity_type="datasets", entity_id=dataset_id,
+                before_json={"review": "pending"},
+                after_json={"decision": body.decision, "note": note,
+                            "dataset_sha256": ds["content_sha256"], "dataset_version": ds["version"]},
+                result="success", occurred_at=reviewed_at,
+            ))
+    except IntegrityError:
+        raise HTTPException(409, "La versión ya fue revisada; actualiza la pantalla") from None
+    except SQLAlchemyError:
+        raise HTTPException(503, "No fue posible guardar la revisión") from None
+    return {"dataset_id": str(dataset_id), "decision": body.decision,
+            "note": note, "reviewer_name": principal.full_name,
+            "reviewed_at": reviewed_at.isoformat(), "dataset_sha256": ds["content_sha256"]}

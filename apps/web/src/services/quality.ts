@@ -1,7 +1,8 @@
+import { apiAuthed } from '../auth/api';
 /** Cliente IGP de calidad y snapshots: únicamente API propia, jamás Supabase desde React. */
 import { filterQuery } from './analytics';
 import type { AnalyticsFilters } from '../types/analytics';
-import type { DatasetIntegrity, DatasetList, DatasetPreview, DatasetMetadata, QualityReport } from '../types/quality';
+import type { DatasetIntegrity, DatasetList, DatasetPreview, DatasetMetadata, DatasetReviewResponse, QualityReport } from '../types/quality';
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000';
 
@@ -26,3 +27,9 @@ export const getDatasetPreview = (id: string, page = 1, pageSize = 5, signal?: A
 
 export const getDatasetIntegrity = (id: string, signal?: AbortSignal) =>
   request<DatasetIntegrity>(`datasets/${encodeURIComponent(id)}/integrity`, signal);
+
+/** Solo administradores/analistas autenticados pueden emitir una decisión inmutable. */
+export const reviewDataset = (id: string, decision: 'approved' | 'rejected', note: string) =>
+  apiAuthed<DatasetReviewResponse>(`/api/v1/datasets/${encodeURIComponent(id)}/review`, {
+    method: 'POST', body: JSON.stringify({ decision, note }),
+  });

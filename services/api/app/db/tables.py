@@ -121,6 +121,19 @@ ml_experiments = Table(
     Column("created_at", DateTime(timezone=True)),
 )
 
+# Fase ML IGP 02: valores observados y estimados de validación 2024.
+# Permite gráficas y auditoría por fila, sin modificar ml_experiments.
+ml_validation_predictions = Table(
+    'ml_validation_predictions', metadata,
+    Column('experiment_id', Uuid(as_uuid=True), ForeignKey('public.ml_experiments.id'), primary_key=True),
+    Column('source_row', Integer, primary_key=True),
+    Column('dataset_id', Uuid(as_uuid=True), ForeignKey('public.datasets.id'), nullable=False),
+    Column('occurred_at', DateTime(timezone=True), nullable=False),
+    Column('split', Text, nullable=False),
+    Column('actual_value', JSON, nullable=False),
+    Column('predicted_value', JSON, nullable=False),
+)
+
 # Fase 7 · extensiones no destructivas de las tablas de migración 001 / 004.
 from sqlalchemy import Boolean, Numeric, SmallInteger
 
@@ -256,4 +269,47 @@ system_settings = Table(
     Column('value_int', Integer, nullable=False),
     Column('updated_at', DateTime(timezone=True)),
     Column('updated_by', Uuid(as_uuid=True), ForeignKey('public.users.id')),
+)
+
+# Revisión humana de versiones IGP; una decisión inmutable por dataset.
+# No cambia el hash del snapshot ni las métricas de los modelos existentes.
+dataset_reviews = Table(
+    "dataset_reviews", metadata,
+    Column("dataset_id", Uuid(as_uuid=True), ForeignKey("public.datasets.id"), primary_key=True),
+    Column("decision", Text, nullable=False),
+    Column("note", Text, nullable=False),
+    Column("reviewed_by", Uuid(as_uuid=True), ForeignKey("public.users.id"), nullable=False),
+    Column("reviewed_at", DateTime(timezone=True), nullable=False),
+    Column("dataset_sha256", Text, nullable=False),
+)
+
+# ML IGP 07: cierre de prueba final 2025, independiente de validación 2024.
+# Se requiere 012_ML_IGP_03_PRUEBA_FINAL_2025.sql; los datos son append-only.
+ml_final_batches = Table(
+    'ml_final_batches', metadata,
+    Column('batch_id', Uuid(as_uuid=True), primary_key=True),
+    Column('dataset_id', Uuid(as_uuid=True), ForeignKey('public.datasets.id'), nullable=False, unique=True),
+    Column('dataset_sha256', Text, nullable=False),
+    Column('source_file_sha256', Text, nullable=False),
+    Column('holdout_sha256', Text, nullable=False),
+    Column('test_count', Integer, nullable=False),
+    Column('development_count', Integer, nullable=False),
+    Column('method', Text, nullable=False),
+    Column('limitations', Text, nullable=False),
+    Column('evaluated_at', DateTime(timezone=True), nullable=False),
+)
+ml_final_holdout_rows = Table(
+    'ml_final_holdout_rows', metadata,
+    Column('batch_id', Uuid(as_uuid=True), ForeignKey('public.ml_final_batches.batch_id'), primary_key=True),
+    Column('source_row', Integer, primary_key=True),
+    Column('position', Integer, nullable=False),
+    Column('record', JSON, nullable=False),
+    UniqueConstraint('batch_id', 'position', name='ml_final_holdout_position_uq'),
+)
+ml_final_evaluations = Table(
+    'ml_final_evaluations', metadata,
+    Column('experiment_id', Uuid(as_uuid=True), ForeignKey('public.ml_experiments.id'), primary_key=True),
+    Column('batch_id', Uuid(as_uuid=True), ForeignKey('public.ml_final_batches.batch_id'), nullable=False),
+    Column('algorithm', Text, nullable=False),
+    Column('metrics', JSON, nullable=False),
 )

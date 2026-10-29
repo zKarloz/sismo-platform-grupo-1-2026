@@ -58,4 +58,103 @@ export interface ExperimentFilters {
   datasetId?: string;
   batchId?: string;
   taskType?: 'classification' | 'regression' | '';
+  experimentId?: string; // Solo detalles de Estimaciones, filtrados en FastAPI.
+}
+
+/** Valores observados y estimados por fila física del Excel IGP, solo 2024. */
+export interface ValidationPrediction {
+  source_row: number;
+  occurred_at: string;
+  actual_value: number | string;
+  predicted_value: number | string;
+}
+export interface PredictionList {
+  experiment_id: string;
+  total: number;
+  page: number;
+  page_size: number;
+  split: 'validation';
+  year: 2024;
+  items: ValidationPrediction[];
+}
+
+
+/** Valores de validación ya observados. NO son pronósticos ni publicaciones. */
+export interface RetrospectiveEstimate {
+  experiment_id: string;
+  batch_id: string;
+  dataset_name: string;
+  dataset_version: number;
+  algorithm: string;
+  model_version: string;
+  task_type: 'regression' | 'classification';
+  target_name: string;
+  source_row: number;
+  occurred_at: string;
+  latitude: number | null;
+  longitude: number | null;
+  actual_value: string | number;
+  predicted_value: string | number;
+  absolute_error: number | null;
+  correct_classification: boolean | null;
+  probability: null;
+  prediction_interval: null;
+  uncertainty_note: string;
+  experiment_registered_at: string | null;
+  calculated_at: null;
+  review_status: 'not_reviewed';
+  published: false;
+  limitations: string;
+  warning: string;
+}
+export interface EstimateList {
+  items: RetrospectiveEstimate[];
+  total: number;
+  page: number;
+  page_size: number;
+  year: 2024;
+  split: 'validation';
+  review_status: 'not_reviewed';
+  disclaimer: string;
+}
+
+/** Resumen agregado en FastAPI sobre todas las filas IGP 2024 válidas. */
+export interface EstimateSummaryModel {
+  experiment_id: string;
+  batch_id: string;
+  algorithm: string;
+  model_version: string;
+  task_type: 'regression' | 'classification';
+  target_name: string;
+  total: number;
+  primary_metric: 'mae' | 'macro_f1';
+  primary_value: number | null;
+}
+export interface EstimateSummary {
+  total_estimates: number;
+  unique_events: number;
+  total_models: number;
+  models: EstimateSummaryModel[];
+  year: 2024;
+  split: 'validation';
+  note: string;
+}
+
+/** Resumen persistido de prueba final 2025; sin predicciones operativas. */
+export interface FinalEvaluationReport {
+  batch_id: string;
+  dataset_id: string;
+  year: 2025;
+  test_count: number;
+  development_count: number;
+  evaluated_at: string;
+  method: string;
+  sha256: string;
+  // Métricas reales persistidas. En 2025 no hay pares observado/estimado individuales.
+  models: { experiment_id: string; algorithm: string; metrics: Experiment['metrics']; }[];
+}
+export interface FinalEvaluationList {
+  items: FinalEvaluationReport[];
+  total: number;
+  disclaimer: string;
 }
